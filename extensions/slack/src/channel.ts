@@ -41,7 +41,14 @@ function getTokenForOperation(
 ): string | undefined {
   const userToken = account.config.userToken?.trim() || undefined;
   const botToken = account.botToken?.trim();
-  const allowUserWrites = account.config.userTokenReadOnly === false;
+  const isPollingMode = account.mode === "polling";
+  const allowUserWrites = account.config.userTokenReadOnly === false || isPollingMode;
+
+  // In polling mode, always prefer userToken (there's no botToken)
+  if (isPollingMode) {
+    return userToken ?? botToken;
+  }
+
   if (operation === "read") {
     return userToken ?? botToken;
   }
