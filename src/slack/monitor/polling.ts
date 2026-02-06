@@ -17,37 +17,72 @@ export interface PollingConfig {
   abortSignal?: AbortSignal;
 }
 
+type ChannelInfo = {
+  id: string;
+  type: "im" | "mpim" | "channel" | "group";
+};
+
 // Track processed messages to avoid duplicates
 const processedMessages = new Set<string>();
 
 // Track discovered channels
-const discoveredChannels = new Set<string>();
+const discoveredChannels = new Map<string, ChannelInfo>();
 
 /**
- * Get all DM channels for the user
+ * Get all channels the user is a member of (DMs, group DMs, and channels)
  */
-async function getDmChannels(client: WebClient): Promise<string[]> {
-  const channels: string[] = [];
+async function getAllChannels(client: WebClient): Promise<ChannelInfo[]> {
+  const channels: ChannelInfo[] = [];
+
   try {
-    const response = await client.conversations.list({
+    // Get DMs and group DMs
+    const dmResponse = await client.conversations.list({
       types: "im,mpim",
       limit: 100,
     });
-    if (response.ok && response.channels) {
-      for (const ch of response.channels) {
+    if (dmResponse.ok && dmResponse.channels) {
+      for (const ch of dmResponse.channels) {
         if (ch.id) {
-          channels.push(ch.id);
-          if (!discoveredChannels.has(ch.id)) {
-            discoveredChannels.add(ch.id);
-          }
+          const type = ch.is_mpim ? "mpim" : "im";
+          channels.push({ id: ch.id, type });
+          discoveredChannels.set(ch.id, { id: ch.id, type });
         }
       }
     }
   } catch (err) {
-    // Log but don't throw - we'll retry on next poll
     console.error("Error fetching DM channels:", err);
   }
+
+  try {
+    // Get public and private channels the user is a member of
+    const channelResponse = await client.conversations.list({
+      types: "public_channel,private_channel",
+      limit: 200,
+      exclude_archived: true,
+    });
+    if (channelResponse.ok && channelResponse.channels) {
+      for (const ch of channelResponse.channels) {
+        if (ch.id && ch.is_member) {
+          const type = ch.is_private ? "group" : "channel";
+          channels.push({ id: ch.id, type });
+          discoveredChannels.set(ch.id, { id: ch.id, type });
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Error fetching channels:", err);
+  }
+
   return channels;
+}
+
+/**
+ * Check if text contains a mention of the user
+ */
+function containsMention(text: string, userId: string): boolean {
+  // Check for <@USER_ID> mention format
+  const mentionPattern = new RegExp(`<@${userId}>`, "i");
+  return mentionPattern.test(text);
 }
 
 /**
@@ -55,10 +90,13 @@ async function getDmChannels(client: WebClient): Promise<string[]> {
  */
 async function pollChannel(
   client: WebClient,
-  channelId: string,
+  channelInfo: ChannelInfo,
   myUserId: string,
   handleSlackMessage: SlackMessageHandler,
 ): Promise<void> {
+  const { id: channelId, type: channelType } = channelInfo;
+  const isDirectMessage = channelType === "im" || channelType === "mpim";
+
   try {
     const response = await client.conversations.history({
       channel: channelId,
@@ -106,6 +144,12 @@ async function pollChannel(
         continue;
       }
 
+      // For channels (not DMs), require @mention
+      if (!isDirectMessage && !containsMention(text, myUserId)) {
+        processedMessages.add(ts);
+        continue;
+      }
+
       // Mark as processed before handling
       processedMessages.add(ts);
 
@@ -117,7 +161,7 @@ async function pollChannel(
         text: text,
         ts: ts,
         event_ts: ts,
-        channel_type: "im",
+        channel_type: channelType,
         // Include thread_ts if it's a threaded reply
         ...(msg.thread_ts && msg.thread_ts !== ts ? { thread_ts: msg.thread_ts } : {}),
       };
@@ -152,11 +196,11 @@ async function pollingLoop(config: PollingConfig): Promise<void> {
 
   while (!abortSignal?.aborted) {
     try {
-      const channels = await getDmChannels(client);
+      const channels = await getAllChannels(client);
 
-      for (const channelId of channels) {
+      for (const channelInfo of channels) {
         if (abortSignal?.aborted) break;
-        await pollChannel(client, channelId, myUserId, handleSlackMessage);
+        await pollChannel(client, channelInfo, myUserId, handleSlackMessage);
       }
     } catch (err) {
       console.error("Polling loop error:", err);
