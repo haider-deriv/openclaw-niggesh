@@ -46,6 +46,8 @@ export const LinkedInChannelAccountSchemaBase = z.object({
   webhookPath: z.string().optional(),
   /** Public base URL for webhooks (e.g., "https://your-domain.com" or ngrok URL). Required for receiving messages. */
   webhookBaseUrl: z.string().optional(),
+  /** Polling interval in seconds for checking new messages. Default: 30. */
+  pollInterval: z.number().int().min(5).max(300).optional(),
   /** History limit for message retrieval. */
   historyLimit: z.number().int().min(0).optional(),
 });

@@ -32,6 +32,7 @@ export type ResolvedLinkedInAccount = {
   webhookSecret?: string;
   webhookPath?: string;
   webhookBaseUrl?: string;
+  pollInterval?: number; // Polling interval in seconds (default: 30)
 };
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -86,6 +87,7 @@ function resolveLinkedInAccount(
     webhookSecret: channelCfg?.webhookSecret,
     webhookPath: channelCfg?.webhookPath,
     webhookBaseUrl: channelCfg?.webhookBaseUrl,
+    pollInterval: channelCfg?.pollInterval,
   };
 }
 
@@ -372,80 +374,34 @@ export const linkedInMessagingPlugin: ChannelPlugin<ResolvedLinkedInAccount> = {
       const config = ctx.cfg; // NOTE: It's ctx.cfg, not ctx.config!
       ctx.log?.info(`[${account.accountId}] starting LinkedIn messaging provider`);
 
-      const { startLinkedInWebhookHandler, processLinkedInMessage } =
-        await import("./webhook-handler.js");
+      const { processLinkedInMessage } = await import("./webhook-handler.js");
+      const { startLinkedInPolling } = await import("../../../src/linkedin/polling.js");
 
-      const webhookHandler = startLinkedInWebhookHandler({
-        account,
+      // Build client options for Unipile API
+      const clientOpts = {
+        baseUrl: account.baseUrl,
+        apiKey: account.apiKey,
+        accountId: account.unipileAccountId,
+        timeoutMs: account.timeoutMs,
+      };
+
+      // Start polling mode (more reliable than webhooks)
+      const pollInterval = account.pollInterval ?? 30;
+      ctx.log?.info(
+        `[${account.accountId}] starting LinkedIn polling mode (interval: ${pollInterval}s)`,
+      );
+
+      startLinkedInPolling({
+        clientOpts,
         config,
+        accountId: account.accountId,
+        pollInterval,
         abortSignal: ctx.abortSignal,
         onMessage: async (payload) => {
           await processLinkedInMessage(payload, account, config);
         },
+        log: (msg) => ctx.log?.info(msg),
       });
-
-      ctx.log?.info(`[${account.accountId}] webhook handler registered at ${webhookHandler.path}`);
-
-      // Register webhook with Unipile if webhookBaseUrl is configured
-      if (account.webhookBaseUrl) {
-        try {
-          const { createWebhook, listWebhooks, deleteWebhook } =
-            await import("../../../src/linkedin/client.js");
-          const clientOpts = {
-            baseUrl: account.baseUrl,
-            apiKey: account.apiKey,
-            accountId: account.unipileAccountId,
-            timeoutMs: account.timeoutMs,
-          };
-
-          const fullWebhookUrl = `${account.webhookBaseUrl.replace(/\/+$/, "")}${webhookHandler.path}`;
-
-          // Check if webhook already exists
-          const existingWebhooks = await listWebhooks(clientOpts);
-          const existingWebhook = existingWebhooks.items?.find(
-            (w) => w.request_url === fullWebhookUrl,
-          );
-
-          if (existingWebhook) {
-            // Check if it's enabled - if not, delete and recreate
-            if (existingWebhook.enabled) {
-              ctx.log?.info(
-                `[${account.accountId}] webhook already registered and enabled: ${fullWebhookUrl}`,
-              );
-            } else {
-              ctx.log?.info(
-                `[${account.accountId}] webhook exists but disabled, recreating: ${fullWebhookUrl}`,
-              );
-              await deleteWebhook(clientOpts, existingWebhook.id);
-              const result = await createWebhook(clientOpts, {
-                request_url: fullWebhookUrl,
-                name: `openclaw-linkedin-${account.accountId}`,
-              });
-              ctx.log?.info(
-                `[${account.accountId}] recreated webhook: ${fullWebhookUrl} (id: ${result.webhook_id})`,
-              );
-            }
-          } else {
-            // Register new webhook
-            const result = await createWebhook(clientOpts, {
-              request_url: fullWebhookUrl,
-              name: `openclaw-linkedin-${account.accountId}`,
-            });
-            ctx.log?.info(
-              `[${account.accountId}] registered webhook with Unipile: ${fullWebhookUrl} (id: ${result.webhook_id})`,
-            );
-          }
-        } catch (err) {
-          ctx.log?.warn?.(
-            `[${account.accountId}] failed to register webhook with Unipile: ${String(err)}`,
-          );
-        }
-      } else {
-        ctx.log?.warn?.(
-          `[${account.accountId}] webhookBaseUrl not configured - messages won't be received. ` +
-            `Set channels.linkedin.webhookBaseUrl to your public URL (e.g., ngrok URL)`,
-        );
-      }
 
       ctx.setStatus({
         accountId: ctx.accountId,
@@ -457,7 +413,6 @@ export const linkedInMessagingPlugin: ChannelPlugin<ResolvedLinkedInAccount> = {
       return new Promise<void>((resolve) => {
         ctx.abortSignal?.addEventListener("abort", () => {
           ctx.log?.info(`[${account.accountId}] stopping LinkedIn messaging provider`);
-          webhookHandler.stop();
           ctx.setStatus({
             accountId: ctx.accountId,
             running: false,
