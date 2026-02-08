@@ -1,0 +1,14 @@
+{
+  "name": "@openclaw/linkedin-messaging",
+  "version": "2026.2.6-3",
+  "description": "OpenClaw LinkedIn messaging channel plugin",
+  "type": "module",
+  "devDependencies": {
+    "openclaw": "workspace:*"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

@@ -10,6 +10,16 @@ import type {
   LinkedInSearchParametersResponse,
   LinkedInSearchRequestBody,
   LinkedInSearchResponse,
+  // Messaging types
+  LinkedInChatListResponse,
+  LinkedInMessageListResponse,
+  LinkedInChatAttendeesResponse,
+  LinkedInStartChatRequest,
+  LinkedInStartChatResponse,
+  LinkedInSendMessageRequest,
+  LinkedInSendMessageResponse,
+  LinkedInCreateWebhookRequest,
+  LinkedInCreateWebhookResponse,
 } from "./types.js";
 import { resolveFetch } from "../infra/fetch.js";
 
@@ -195,4 +205,198 @@ export async function checkLinkedInConnection(
       error: err instanceof Error ? err.message : String(err),
     };
   }
+}
+
+// ============================================================================
+// LinkedIn Messaging Functions (Unipile Messaging API)
+// ============================================================================
+
+/**
+ * List chats (conversations) for a LinkedIn account.
+ * GET /api/v1/chats
+ */
+export async function listChats(
+  opts: LinkedInClientOptions,
+  params?: {
+    limit?: number;
+    cursor?: string;
+    unread?: boolean;
+    account_type?: "LINKEDIN";
+    before?: string;
+    after?: string;
+  },
+): Promise<LinkedInChatListResponse> {
+  const queryParams = new URLSearchParams();
+  queryParams.set("account_id", opts.accountId);
+  queryParams.set("account_type", "LINKEDIN");
+
+  if (params?.limit) {
+    queryParams.set("limit", String(params.limit));
+  }
+  if (params?.cursor) {
+    queryParams.set("cursor", params.cursor);
+  }
+  if (params?.unread !== undefined) {
+    queryParams.set("unread", String(params.unread));
+  }
+  if (params?.before) {
+    queryParams.set("before", params.before);
+  }
+  if (params?.after) {
+    queryParams.set("after", params.after);
+  }
+
+  const path = `/api/v1/chats?${queryParams.toString()}`;
+  return linkedInRequest<LinkedInChatListResponse>("GET", path, opts);
+}
+
+/**
+ * Get messages from a specific chat.
+ * GET /api/v1/chats/{chat_id}/messages
+ */
+export async function getMessages(
+  opts: LinkedInClientOptions,
+  chatId: string,
+  params?: {
+    limit?: number;
+    cursor?: string;
+    before?: string;
+    after?: string;
+  },
+): Promise<LinkedInMessageListResponse> {
+  const queryParams = new URLSearchParams();
+
+  if (params?.limit) {
+    queryParams.set("limit", String(params.limit));
+  }
+  if (params?.cursor) {
+    queryParams.set("cursor", params.cursor);
+  }
+  if (params?.before) {
+    queryParams.set("before", params.before);
+  }
+  if (params?.after) {
+    queryParams.set("after", params.after);
+  }
+
+  const qs = queryParams.toString();
+  const path = `/api/v1/chats/${encodeURIComponent(chatId)}/messages${qs ? `?${qs}` : ""}`;
+  return linkedInRequest<LinkedInMessageListResponse>("GET", path, opts);
+}
+
+/**
+ * Get chat attendees (participants in a conversation).
+ * GET /api/v1/chats/{chat_id}/attendees
+ */
+export async function getChatAttendees(
+  opts: LinkedInClientOptions,
+  chatId: string,
+  params?: {
+    limit?: number;
+    cursor?: string;
+  },
+): Promise<LinkedInChatAttendeesResponse> {
+  const queryParams = new URLSearchParams();
+
+  if (params?.limit) {
+    queryParams.set("limit", String(params.limit));
+  }
+  if (params?.cursor) {
+    queryParams.set("cursor", params.cursor);
+  }
+
+  const qs = queryParams.toString();
+  const path = `/api/v1/chats/${encodeURIComponent(chatId)}/attendees${qs ? `?${qs}` : ""}`;
+  return linkedInRequest<LinkedInChatAttendeesResponse>("GET", path, opts);
+}
+
+/**
+ * Send a message in an existing chat.
+ * POST /api/v1/chats/{chat_id}/messages
+ */
+export async function sendMessage(
+  opts: LinkedInClientOptions,
+  chatId: string,
+  request: LinkedInSendMessageRequest,
+): Promise<LinkedInSendMessageResponse> {
+  const path = `/api/v1/chats/${encodeURIComponent(chatId)}/messages`;
+  return linkedInRequest<LinkedInSendMessageResponse>("POST", path, opts, {
+    ...request,
+    account_id: request.account_id ?? opts.accountId,
+  });
+}
+
+/**
+ * Start a new chat (conversation) with LinkedIn users.
+ * POST /api/v1/chats
+ */
+export async function startChat(
+  opts: LinkedInClientOptions,
+  request: Omit<LinkedInStartChatRequest, "account_id">,
+): Promise<LinkedInStartChatResponse> {
+  const path = `/api/v1/chats`;
+  return linkedInRequest<LinkedInStartChatResponse>("POST", path, opts, {
+    ...request,
+    account_id: opts.accountId,
+  });
+}
+
+/**
+ * Create a webhook for messaging events.
+ * POST /api/v1/webhooks
+ */
+export async function createWebhook(
+  opts: LinkedInClientOptions,
+  request: Omit<LinkedInCreateWebhookRequest, "source" | "account_ids">,
+): Promise<LinkedInCreateWebhookResponse> {
+  const path = `/api/v1/webhooks`;
+  return linkedInRequest<LinkedInCreateWebhookResponse>("POST", path, opts, {
+    ...request,
+    source: "messaging",
+    account_ids: [opts.accountId],
+  });
+}
+
+/**
+ * Delete a webhook.
+ * DELETE /api/v1/webhooks/{webhook_id}
+ */
+export async function deleteWebhook(opts: LinkedInClientOptions, webhookId: string): Promise<void> {
+  const baseUrl = normalizeBaseUrl(opts.baseUrl);
+  const url = `${baseUrl}/api/v1/webhooks/${encodeURIComponent(webhookId)}`;
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+
+  const res = await fetchWithTimeout(
+    url,
+    {
+      method: "DELETE",
+      headers: {
+        "X-API-KEY": opts.apiKey,
+        Accept: "application/json",
+      },
+    },
+    timeoutMs,
+  );
+
+  if (!res.ok) {
+    const errorMsg = await parseErrorResponse(res);
+    throw new Error(`LinkedIn API error (${res.status}): ${errorMsg}`);
+  }
+}
+
+/**
+ * List all webhooks for the account.
+ * GET /api/v1/webhooks
+ */
+export async function listWebhooks(
+  opts: LinkedInClientOptions,
+): Promise<{
+  object: "WebhookList";
+  items: Array<{ id: string; name?: string; request_url: string; enabled: boolean }>;
+}> {
+  const path = `/api/v1/webhooks`;
+  return linkedInRequest<{
+    object: "WebhookList";
+    items: Array<{ id: string; name?: string; request_url: string; enabled: boolean }>;
+  }>("GET", path, opts);
 }

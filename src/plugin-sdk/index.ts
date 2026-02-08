@@ -340,6 +340,9 @@ export { collectWhatsAppStatusIssues } from "../channels/plugins/status-issues/w
 // Channel: BlueBubbles
 export { collectBlueBubblesStatusIssues } from "../channels/plugins/status-issues/bluebubbles.js";
 
+// Channel: LinkedIn
+export { linkedinOnboardingAdapter } from "../channels/plugins/onboarding/linkedin.js";
+
 // Channel: LINE
 export {
   listLineAccountIds,
