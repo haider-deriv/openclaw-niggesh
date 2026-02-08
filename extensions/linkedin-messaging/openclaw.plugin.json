@@ -1,5 +1,5 @@
 {
-  "id": "linkedin-messaging",
+  "id": "linkedin",
   "channels": ["linkedin"],
   "configSchema": {
     "type": "object",
