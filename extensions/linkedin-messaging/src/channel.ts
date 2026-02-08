@@ -66,9 +66,9 @@ function resolveLinkedInAccount(
     return null;
   }
 
-  // Channel settings come from channels.linkedin
-  const dmPolicy = channelCfg?.dmPolicy ?? "pairing";
-  const allowFrom = channelCfg?.allowFrom?.map((item) => String(item)) ?? [];
+  // Channel settings come from channels.linkedin.dm
+  const dmPolicy = channelCfg?.dm?.policy ?? "pairing";
+  const allowFrom = channelCfg?.dm?.allowFrom?.map((item) => String(item)) ?? [];
 
   return {
     accountId: DEFAULT_ACCOUNT_ID,
@@ -189,8 +189,8 @@ export const linkedInMessagingPlugin: ChannelPlugin<ResolvedLinkedInAccount> = {
       return {
         policy: account.dmPolicy ?? "pairing",
         allowFrom: account.allowFrom ?? [],
-        policyPath: "channels.linkedin.dmPolicy",
-        allowFromPath: "channels.linkedin.allowFrom",
+        policyPath: "channels.linkedin.dm.policy",
+        allowFromPath: "channels.linkedin.dm.allowFrom",
         approveHint: formatPairingApproveHint("linkedin"),
         normalizeEntry: (raw) => normalizeLinkedInTarget(raw),
       };

@@ -9,6 +9,20 @@ import { z } from "zod";
 import { DmPolicySchema, requireOpenAllowFrom } from "./zod-schema.core.js";
 
 /**
+ * LinkedIn DM configuration schema.
+ */
+export const LinkedInDmConfigSchema = z
+  .object({
+    /** If false, ignore all incoming LinkedIn DMs. Default: true. */
+    enabled: z.boolean().optional(),
+    /** Direct message access policy (default: pairing). */
+    policy: DmPolicySchema.optional().default("pairing"),
+    /** Allowlist for DM senders (provider IDs). */
+    allowFrom: z.array(z.union([z.string(), z.number()])).optional(),
+  })
+  .strict();
+
+/**
  * LinkedIn channel account configuration schema.
  */
 export const LinkedInChannelAccountSchemaBase = z.object({
@@ -16,10 +30,8 @@ export const LinkedInChannelAccountSchemaBase = z.object({
   enabled: z.boolean().optional(),
   /** Display name for this account. */
   name: z.string().optional(),
-  /** DM policy: "open", "pairing", or "allowlist". Default: "pairing". */
-  dmPolicy: DmPolicySchema.optional().default("pairing"),
-  /** List of allowed sender IDs (LinkedIn provider IDs). */
-  allowFrom: z.array(z.union([z.string(), z.number()])).optional(),
+  /** DM configuration (policy and allowFrom). */
+  dm: LinkedInDmConfigSchema.optional(),
   /** Unipile DSN base URL (e.g., "api1.unipile.com:13111"). Falls back to tools.linkedin.baseUrl or UNIPILE_BASE_URL. */
   baseUrl: z.string().optional(),
   /** Unipile API key for authentication. Falls back to tools.linkedin.apiKey or UNIPILE_API_KEY. */
@@ -39,12 +51,12 @@ export const LinkedInChannelAccountSchemaBase = z.object({
 export const LinkedInChannelAccountSchema = LinkedInChannelAccountSchemaBase.superRefine(
   (value, ctx) => {
     requireOpenAllowFrom({
-      policy: value.dmPolicy,
-      allowFrom: value.allowFrom,
+      policy: value.dm?.policy,
+      allowFrom: value.dm?.allowFrom,
       ctx,
-      path: ["allowFrom"],
+      path: ["dm", "allowFrom"],
       message:
-        'channels.linkedin.dmPolicy="open" requires channels.linkedin.allowFrom to include "*"',
+        'channels.linkedin.dm.policy="open" requires channels.linkedin.dm.allowFrom to include "*"',
     });
   },
 );
@@ -57,19 +69,19 @@ export const LinkedInChannelConfigSchema = LinkedInChannelAccountSchemaBase.exte
   accounts: z.record(z.string(), LinkedInChannelAccountSchema.optional()).optional(),
 }).superRefine((value, ctx) => {
   requireOpenAllowFrom({
-    policy: value.dmPolicy,
-    allowFrom: value.allowFrom,
+    policy: value.dm?.policy,
+    allowFrom: value.dm?.allowFrom,
     ctx,
-    path: ["allowFrom"],
+    path: ["dm", "allowFrom"],
     message:
-      'channels.linkedin.dmPolicy="open" requires channels.linkedin.allowFrom to include "*"',
+      'channels.linkedin.dm.policy="open" requires channels.linkedin.dm.allowFrom to include "*"',
   });
 
   // Validate per-account settings
   if (!value.accounts) {
     return;
   }
-  for (const [accountId, account] of Object.entries(value.accounts)) {
+  for (const [_accountId, account] of Object.entries(value.accounts)) {
     if (!account) {
       continue;
     }

@@ -383,7 +383,7 @@ const DOCKS: Record<ChatChannelId, ChannelDock> = {
     outbound: { textChunkLimit: 4000 },
     config: {
       resolveAllowFrom: ({ cfg }) => {
-        const allowFrom = cfg.channels?.linkedin?.allowFrom ?? [];
+        const allowFrom = cfg.channels?.linkedin?.dm?.allowFrom ?? [];
         return allowFrom.map((entry) => String(entry));
       },
       formatAllowFrom: ({ allowFrom }) =>

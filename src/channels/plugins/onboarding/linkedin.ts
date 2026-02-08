@@ -89,7 +89,9 @@ function setLinkedInDmPolicy(cfg: OpenClawConfig, dmPolicy: DmPolicy): OpenClawC
   // LinkedIn only supports open, pairing, allowlist (not "disabled")
   const validPolicy = dmPolicy === "disabled" ? "pairing" : dmPolicy;
   const rawAllowFrom =
-    validPolicy === "open" ? addWildcardAllowFrom(cfg.channels?.linkedin?.allowFrom) : undefined;
+    validPolicy === "open"
+      ? addWildcardAllowFrom(cfg.channels?.linkedin?.dm?.allowFrom)
+      : undefined;
   // Ensure allowFrom is string[]
   const allowFrom = rawAllowFrom?.map((item) => String(item));
   return {
@@ -99,8 +101,11 @@ function setLinkedInDmPolicy(cfg: OpenClawConfig, dmPolicy: DmPolicy): OpenClawC
       linkedin: {
         ...cfg.channels?.linkedin,
         enabled: dmPolicy !== "disabled",
-        dmPolicy: validPolicy,
-        ...(allowFrom ? { allowFrom } : {}),
+        dm: {
+          ...cfg.channels?.linkedin?.dm,
+          policy: validPolicy,
+          ...(allowFrom ? { allowFrom } : {}),
+        },
       },
     },
   };
@@ -142,7 +147,7 @@ async function promptLinkedInAllowFrom(params: {
   prompter: WizardPrompter;
 }): Promise<OpenClawConfig> {
   const { cfg, prompter } = params;
-  const existingAllowFrom = cfg.channels?.linkedin?.allowFrom ?? [];
+  const existingAllowFrom = cfg.channels?.linkedin?.dm?.allowFrom ?? [];
 
   await prompter.note(
     [
@@ -176,8 +181,11 @@ async function promptLinkedInAllowFrom(params: {
       linkedin: {
         ...cfg.channels?.linkedin,
         enabled: true,
-        dmPolicy: "allowlist",
-        allowFrom: unique,
+        dm: {
+          ...cfg.channels?.linkedin?.dm,
+          policy: "allowlist",
+          allowFrom: unique,
+        },
       },
     },
   };
@@ -186,9 +194,9 @@ async function promptLinkedInAllowFrom(params: {
 const dmPolicy: ChannelOnboardingDmPolicy = {
   label: "LinkedIn",
   channel,
-  policyKey: "channels.linkedin.dmPolicy",
-  allowFromKey: "channels.linkedin.allowFrom",
-  getCurrent: (cfg) => cfg.channels?.linkedin?.dmPolicy ?? "pairing",
+  policyKey: "channels.linkedin.dm.policy",
+  allowFromKey: "channels.linkedin.dm.allowFrom",
+  getCurrent: (cfg) => cfg.channels?.linkedin?.dm?.policy ?? "pairing",
   setPolicy: (cfg, policy) => setLinkedInDmPolicy(cfg, policy),
   promptAllowFrom: promptLinkedInAllowFrom,
 };

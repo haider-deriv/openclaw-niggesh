@@ -35,6 +35,18 @@ export type LinkedInConfig = {
 // ============================================================================
 
 /**
+ * LinkedIn DM configuration.
+ */
+export type LinkedInDmConfig = {
+  /** If false, ignore all incoming LinkedIn DMs. Default: true. */
+  enabled?: boolean;
+  /** Direct message access policy (default: pairing). */
+  policy?: DmPolicy;
+  /** Allowlist for DM senders (provider IDs). */
+  allowFrom?: Array<string | number>;
+};
+
+/**
  * LinkedIn channel account configuration.
  */
 export type LinkedInChannelAccountConfig = {
@@ -42,10 +54,8 @@ export type LinkedInChannelAccountConfig = {
   enabled?: boolean;
   /** Display name for this account. */
   name?: string;
-  /** DM policy: "open", "pairing", or "allowlist". Default: "pairing". */
-  dmPolicy?: DmPolicy;
-  /** List of allowed sender IDs (LinkedIn provider IDs). */
-  allowFrom?: (string | number)[];
+  /** DM configuration (policy and allowFrom). */
+  dm?: LinkedInDmConfig;
   /** Unipile DSN base URL. Falls back to tools.linkedin.baseUrl or UNIPILE_BASE_URL. */
   baseUrl?: string;
   /** Unipile API key. Falls back to tools.linkedin.apiKey or UNIPILE_API_KEY. */
