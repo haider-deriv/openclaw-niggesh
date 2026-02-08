@@ -206,6 +206,10 @@ export {
 export { formatPairingApproveHint } from "../channels/plugins/helpers.js";
 export { PAIRING_APPROVED_MESSAGE } from "../channels/plugins/pairing-message.js";
 
+export { dispatchReplyWithBufferedBlockDispatcher } from "../auto-reply/reply/provider-dispatcher.js";
+export type { ReplyDispatcherWithTypingOptions } from "../auto-reply/reply/reply-dispatcher.js";
+export type { MsgContext, FinalizedMsgContext } from "../auto-reply/templating.js";
+
 export type {
   ChannelOnboardingAdapter,
   ChannelOnboardingDmPolicy,

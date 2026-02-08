@@ -5,10 +5,15 @@
  */
 
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { OpenClawConfig } from "openclaw/plugin-sdk";
-import { normalizePluginHttpPath, registerPluginHttpRoute } from "openclaw/plugin-sdk";
+import type { OpenClawConfig, MsgContext, ReplyPayload } from "openclaw/plugin-sdk";
+import {
+  normalizePluginHttpPath,
+  registerPluginHttpRoute,
+  dispatchReplyWithBufferedBlockDispatcher,
+} from "openclaw/plugin-sdk";
 import type { LinkedInWebhookPayload } from "../../../src/linkedin/types.js";
 import type { ResolvedLinkedInAccount } from "./channel.js";
+import { sendMessage } from "../../../src/linkedin/client.js";
 import { getLinkedInRuntime } from "./runtime.js";
 
 export interface LinkedInWebhookHandlerOptions {
@@ -235,35 +240,65 @@ export async function processLinkedInMessage(
     return;
   }
 
-  // Build context payload for the auto-reply system
-  const ctxPayload = {
-    // Standard context fields
-    From: payload.sender?.id ?? "",
-    To: account.unipileAccountId,
-    Body: payload.message ?? "",
-    Provider: "linkedin",
-    AccountId: account.accountId,
-    MessageId: payload.message_id,
-    ChatId: payload.chat_id,
-    Timestamp: payload.timestamp,
-    // LinkedIn-specific fields
-    SenderName: payload.sender?.name,
-    IsGroup: payload.is_group ?? false,
-    MessageType: payload.message_type ?? "MESSAGE",
-    Attachments: payload.attachments,
+  // Build client options for sending replies
+  const clientOpts = {
+    baseUrl: account.baseUrl,
+    apiKey: account.apiKey,
+    accountId: account.unipileAccountId,
+    timeoutMs: account.timeoutMs,
   };
 
-  // TODO: Dispatch to auto-reply system
-  // This will be similar to LINE's dispatchReplyWithBufferedBlockDispatcher
-  // For now, just log the message
+  // Build context payload for the auto-reply system (MsgContext format)
+  const ctxPayload: MsgContext = {
+    Body: payload.message ?? "",
+    From: payload.sender?.id ?? "",
+    To: account.unipileAccountId,
+    SessionKey: `linkedin:${payload.chat_id}`,
+    AccountId: account.accountId,
+    MessageSid: payload.message_id,
+    ReplyToId: payload.chat_id,
+    ChatType: payload.is_group ? "group" : "direct",
+    SenderName: payload.sender?.name,
+  };
+
   runtime.logging?.logVerbose?.(
-    `linkedin: message from ${ctxPayload.SenderName ?? ctxPayload.From}: ${ctxPayload.Body.slice(0, 100)}`,
+    `linkedin: message from ${ctxPayload.SenderName ?? ctxPayload.From}: ${(ctxPayload.Body ?? "").slice(0, 100)}`,
   );
 
-  // The actual dispatch would look something like:
-  // await dispatchReplyWithBufferedBlockDispatcher({
-  //   ctx: ctxPayload,
-  //   cfg: config,
-  //   dispatcherOptions: { ... },
-  // });
+  // Dispatch to auto-reply system
+  try {
+    await dispatchReplyWithBufferedBlockDispatcher({
+      ctx: ctxPayload,
+      cfg: config,
+      dispatcherOptions: {
+        deliver: async (replyPayload: ReplyPayload) => {
+          const text = replyPayload.text;
+          if (!text) {
+            return;
+          }
+
+          // Send reply to the same chat
+          await sendMessage(clientOpts, payload.chat_id, { text });
+
+          runtime.logging?.logVerbose?.(
+            `linkedin: sent reply to ${payload.chat_id}: ${text.slice(0, 100)}`,
+          );
+
+          // Record outbound activity
+          recordChannelRuntimeState({
+            channel: "linkedin",
+            accountId: account.accountId,
+            state: {
+              lastOutboundAt: Date.now(),
+            },
+          });
+        },
+        onError: (err, info) => {
+          runtime.logging?.error?.(`linkedin ${info.kind} reply failed: ${String(err)}`);
+        },
+      },
+    });
+  } catch (err) {
+    runtime.logging?.error?.(`linkedin: auto-reply dispatch failed: ${String(err)}`);
+  }
 }
