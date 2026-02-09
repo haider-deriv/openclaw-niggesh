@@ -31,35 +31,53 @@ const attendeeCache = new Map<string, Map<string, string>>();
 /**
  * Resolve sender name by looking up chat attendees.
  * Caches results to avoid repeated API calls.
+ * Tries to match using sender_attendee_id first, then sender_id.
  */
 async function resolveSenderName(
   chatId: string,
+  senderAttendeeId: string,
   senderId: string,
   clientOpts: LinkedInClientOptions,
   log?: (msg: string) => void,
 ): Promise<string | undefined> {
-  // Check cache first
+  // Check cache first - try both IDs
   const chatAttendees = attendeeCache.get(chatId);
-  if (chatAttendees?.has(senderId)) {
-    return chatAttendees.get(senderId);
+  if (chatAttendees) {
+    const cached = chatAttendees.get(senderAttendeeId) ?? chatAttendees.get(senderId);
+    if (cached) {
+      return cached;
+    }
   }
 
   try {
     // Fetch attendees from API
     const response = await getChatAttendees(clientOpts, chatId);
 
-    // Cache all attendees for this chat
+    log?.(`[LINKEDIN POLLING] Fetched ${response.items.length} attendees for chat ${chatId}`);
+
+    // Cache all attendees for this chat, mapping multiple ID formats
     const newCache = new Map<string, string>();
     for (const attendee of response.items) {
+      log?.(
+        `[LINKEDIN POLLING] Attendee: id=${attendee.id}, provider_id=${attendee.provider_id}, display_name=${attendee.display_name}, is_self=${attendee.is_self}`,
+      );
       if (attendee.display_name) {
-        // Map both id and provider_id to the name for flexible matching
+        // Map id, provider_id to the name for flexible matching
         newCache.set(attendee.id, attendee.display_name);
         newCache.set(attendee.provider_id, attendee.display_name);
       }
     }
     attendeeCache.set(chatId, newCache);
 
-    return newCache.get(senderId);
+    log?.(
+      `[LINKEDIN POLLING] Looking for sender: attendee_id=${senderAttendeeId}, sender_id=${senderId}`,
+    );
+
+    // Try to find the sender name using either ID
+    const name = newCache.get(senderAttendeeId) ?? newCache.get(senderId);
+    log?.(`[LINKEDIN POLLING] Resolved sender name: ${name ?? "NOT FOUND"}`);
+
+    return name;
   } catch (err) {
     log?.(`[LINKEDIN POLLING] Failed to fetch attendees for chat ${chatId}: ${String(err)}`);
     return undefined;
@@ -182,9 +200,18 @@ async function processMessage(
   }
 
   log?.(`[LINKEDIN POLLING] New message in chat ${chatId}: "${msg.text?.slice(0, 50)}..."`);
+  log?.(
+    `[LINKEDIN POLLING] Message sender_id=${msg.sender_id}, sender_attendee_id=${msg.sender_attendee_id}`,
+  );
 
-  // Resolve sender name from chat attendees
-  const senderName = await resolveSenderName(chatId, msg.sender_id, clientOpts, log);
+  // Resolve sender name from chat attendees (try both sender_attendee_id and sender_id)
+  const senderName = await resolveSenderName(
+    chatId,
+    msg.sender_attendee_id,
+    msg.sender_id,
+    clientOpts,
+    log,
+  );
 
   // Convert to webhook payload format (for compatibility with existing handler)
   const payload: LinkedInWebhookPayload = {
