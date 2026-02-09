@@ -20,6 +20,7 @@ import type {
   LinkedInSendMessageResponse,
   LinkedInCreateWebhookRequest,
   LinkedInCreateWebhookResponse,
+  LinkedInUserProfile,
 } from "./types.js";
 import { resolveFetch } from "../infra/fetch.js";
 
@@ -510,4 +511,19 @@ export async function downloadAttachment(
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Get a user's profile by their identifier (provider_id or public_identifier).
+ * GET /api/v1/users/{identifier}
+ */
+export async function getUserProfile(
+  opts: LinkedInClientOptions,
+  identifier: string,
+): Promise<LinkedInUserProfile> {
+  const queryParams = new URLSearchParams();
+  queryParams.set("account_id", opts.accountId);
+
+  const path = `/api/v1/users/${encodeURIComponent(identifier)}?${queryParams.toString()}`;
+  return linkedInRequest<LinkedInUserProfile>("GET", path, opts);
 }

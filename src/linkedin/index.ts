@@ -42,6 +42,7 @@ export type {
   LinkedInCreateWebhookRequest,
   LinkedInCreateWebhookResponse,
   LinkedInWebhookPayload,
+  LinkedInUserProfile,
 } from "./types.js";
 
 // Client functions - Talent Search
@@ -60,6 +61,7 @@ export {
   createWebhook,
   deleteWebhook,
   listWebhooks,
+  getUserProfile,
 } from "./client.js";
 
 // Account management

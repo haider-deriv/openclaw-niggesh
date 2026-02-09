@@ -550,6 +550,20 @@ export type LinkedInCreateWebhookResponse = {
   webhook_id: string;
 };
 
+// User profile response (GET /api/v1/users/{identifier})
+export type LinkedInUserProfile = {
+  object: "UserProfile";
+  provider: "LINKEDIN";
+  provider_id: string;
+  public_identifier: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  headline?: string;
+  location?: string;
+  profile_picture_url?: string;
+  public_profile_url?: string;
+};
+
 // Webhook payload (received from Unipile)
 export type LinkedInWebhookPayload = {
   account_id: string;

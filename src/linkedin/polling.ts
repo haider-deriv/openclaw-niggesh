@@ -12,7 +12,7 @@ import type {
   LinkedInMessage,
   LinkedInWebhookPayload,
 } from "./types.js";
-import { listChats, getMessages, getChatAttendees } from "./client.js";
+import { listChats, getMessages, getChatAttendees, getUserProfile } from "./client.js";
 
 export interface LinkedInPollingConfig {
   clientOpts: LinkedInClientOptions;
@@ -81,6 +81,25 @@ async function resolveSenderName(
 
     // Try to find the sender name using either ID
     let name = newCache.get(senderAttendeeId) ?? newCache.get(senderId);
+
+    // If display_name was undefined, try fetching the user profile
+    if (!name) {
+      log?.(`[LINKEDIN POLLING] display_name not found, fetching user profile for ${senderId}`);
+      try {
+        const profile = await getUserProfile(clientOpts, senderId);
+        if (profile.first_name || profile.last_name) {
+          name = [profile.first_name, profile.last_name].filter(Boolean).join(" ");
+          log?.(`[LINKEDIN POLLING] Got name from user profile: ${name}`);
+          // Cache this for future lookups
+          newCache.set(senderAttendeeId, name);
+          newCache.set(senderId, name);
+        }
+      } catch (profileErr) {
+        log?.(
+          `[LINKEDIN POLLING] Failed to fetch user profile for ${senderId}: ${String(profileErr)}`,
+        );
+      }
+    }
 
     // Fallback to chat name (for direct chats, this is the contact's name)
     if (!name && chatName) {
