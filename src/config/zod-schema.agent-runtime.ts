@@ -559,6 +559,16 @@ export const ToolsSchema = z
       })
       .strict()
       .optional(),
+    linkedin: z
+      .object({
+        enabled: z.boolean().optional(),
+        baseUrl: z.string().optional(),
+        apiKey: z.string().optional(),
+        accountId: z.string().optional(),
+        timeoutMs: z.number().int().positive().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .superRefine((value, ctx) => {

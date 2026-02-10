@@ -12,6 +12,7 @@ export const CHAT_CHANNEL_ORDER = [
   "slack",
   "signal",
   "imessage",
+  "linkedin",
 ] as const;
 
 export type ChatChannelId = (typeof CHAT_CHANNEL_ORDER)[number];
@@ -71,11 +72,11 @@ const CHAT_CHANNEL_META: Record<ChatChannelId, ChannelMeta> = {
   slack: {
     id: "slack",
     label: "Slack",
-    selectionLabel: "Slack (Socket Mode)",
-    detailLabel: "Slack Bot",
+    selectionLabel: "Slack (Bot or User)",
+    detailLabel: "Slack",
     docsPath: "/channels/slack",
     docsLabel: "slack",
-    blurb: "supported (Socket Mode).",
+    blurb: "Socket Mode (bot) or Polling (user token).",
     systemImage: "number",
   },
   signal: {
@@ -97,6 +98,16 @@ const CHAT_CHANNEL_META: Record<ChatChannelId, ChannelMeta> = {
     docsLabel: "imessage",
     blurb: "this is still a work in progress.",
     systemImage: "message.fill",
+  },
+  linkedin: {
+    id: "linkedin",
+    label: "LinkedIn",
+    selectionLabel: "LinkedIn (Unipile API)",
+    detailLabel: "LinkedIn",
+    docsPath: "/channels/linkedin",
+    docsLabel: "linkedin",
+    blurb: "LinkedIn messaging via Unipile API integration.",
+    systemImage: "person.crop.rectangle",
   },
 };
 

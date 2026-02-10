@@ -1,5 +1,5 @@
 import { type FilesUploadV2Arguments, type WebClient } from "@slack/web-api";
-import type { SlackTokenSource } from "./accounts.js";
+import type { ResolvedSlackAccount, SlackTokenSource } from "./accounts.js";
 import {
   chunkMarkdownTextWithMode,
   resolveChunkMode,
@@ -12,8 +12,9 @@ import { loadWebMedia } from "../web/media.js";
 import { resolveSlackAccount } from "./accounts.js";
 import { createSlackWebClient } from "./client.js";
 import { markdownToSlackMrkdwnChunks } from "./format.js";
+import { resolveSlackTarget } from "./resolve-target.js";
 import { parseSlackTarget } from "./targets.js";
-import { resolveSlackBotToken } from "./token.js";
+import { resolveSlackBotToken, resolveSlackUserToken } from "./token.js";
 
 const SLACK_TEXT_LIMIT = 4000;
 
@@ -45,31 +46,59 @@ function resolveToken(params: {
   accountId: string;
   fallbackToken?: string;
   fallbackSource?: SlackTokenSource;
+  account?: ResolvedSlackAccount;
 }) {
   const explicit = resolveSlackBotToken(params.explicit);
   if (explicit) {
     return explicit;
   }
+
+  // In polling mode, prefer user token for sending messages
+  if (params.account?.mode === "polling") {
+    const userToken = resolveSlackUserToken(params.account.userToken);
+    if (userToken) {
+      return userToken;
+    }
+    // Fall through to bot token if user token not available
+  }
+
   const fallback = resolveSlackBotToken(params.fallbackToken);
   if (!fallback) {
+    const tokenType = params.account?.mode === "polling" ? "user or bot" : "bot";
     logVerbose(
-      `slack send: missing bot token for account=${params.accountId} explicit=${Boolean(
+      `slack send: missing ${tokenType} token for account=${params.accountId} explicit=${Boolean(
         params.explicit,
       )} source=${params.fallbackSource ?? "unknown"}`,
     );
     throw new Error(
-      `Slack bot token missing for account "${params.accountId}" (set channels.slack.accounts.${params.accountId}.botToken or SLACK_BOT_TOKEN for default).`,
+      params.account?.mode === "polling"
+        ? `Slack user/bot token missing for account "${params.accountId}" in polling mode (set channels.slack.accounts.${params.accountId}.userToken/botToken or SLACK_USER_TOKEN/SLACK_BOT_TOKEN for default).`
+        : `Slack bot token missing for account "${params.accountId}" (set channels.slack.accounts.${params.accountId}.botToken or SLACK_BOT_TOKEN for default).`,
     );
   }
   return fallback;
 }
 
-function parseRecipient(raw: string): SlackRecipient {
-  const target = parseSlackTarget(raw);
-  if (!target) {
-    throw new Error("Recipient is required for Slack sends");
+/**
+ * Resolve a recipient by ID, email, username, display name, or channel name.
+ * First tries sync parsing for ID patterns, then falls back to async API resolution.
+ */
+async function resolveRecipient(raw: string, client: WebClient): Promise<SlackRecipient> {
+  // First try sync parsing with non-strict mode (won't throw on non-ID patterns)
+  const syncTarget = parseSlackTarget(raw, { strict: false });
+  if (syncTarget) {
+    return { kind: syncTarget.kind, id: syncTarget.id };
   }
-  return { kind: target.kind, id: target.id };
+
+  // Fall back to async resolution via Slack API
+  const resolved = await resolveSlackTarget({ input: raw, client });
+  if (!resolved) {
+    throw new Error(
+      `Could not find Slack user or channel "${raw}". ` +
+        "Try using an ID (user:U123 or channel:C123) or verify the name/email exists.",
+    );
+  }
+  return { kind: resolved.kind, id: resolved.id };
 }
 
 async function resolveChannelId(
@@ -143,9 +172,10 @@ export async function sendMessageSlack(
     accountId: account.accountId,
     fallbackToken: account.botToken,
     fallbackSource: account.botTokenSource,
+    account,
   });
   const client = opts.client ?? createSlackWebClient(token);
-  const recipient = parseRecipient(to);
+  const recipient = await resolveRecipient(to, client);
   const { channelId } = await resolveChannelId(client, recipient);
   const textLimit = resolveTextChunkLimit(cfg, "slack", account.accountId);
   const chunkLimit = Math.min(textLimit, SLACK_TEXT_LIMIT);

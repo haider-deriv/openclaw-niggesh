@@ -302,6 +302,15 @@ const DOCKS: Record<ChatChannelId, ChannelDock> = {
       allowTagsWhenOff: true,
       buildToolContext: (params) => buildSlackThreadingToolContext(params),
     },
+    agentPrompt: {
+      messageToolHints: () => [
+        "Slack supports multiple ways to identify users and channels:",
+        "- Users: by ID (user:U123ABC or <@U123ABC>), email (john@company.com), username (@johndoe), or display name (@John Doe)",
+        "- Channels: by ID (channel:C123ABC or <#C123ABC>), or name (#general or general)",
+        "For the 'to' parameter in sendMessage, you can use any of these formats.",
+        "For memberInfo, the userId parameter also accepts email, username, or display name.",
+      ],
+    },
   },
   signal: {
     id: "signal",
@@ -370,6 +379,29 @@ const DOCKS: Record<ChatChannelId, ChannelDock> = {
           hasRepliedRef,
         };
       },
+    },
+  },
+  linkedin: {
+    id: "linkedin",
+    capabilities: {
+      chatTypes: ["direct"],
+      media: true,
+    },
+    outbound: { textChunkLimit: 4000 },
+    config: {
+      resolveAllowFrom: ({ cfg }) => {
+        const allowFrom = cfg.channels?.linkedin?.dm?.allowFrom ?? [];
+        return allowFrom.map((entry) => String(entry));
+      },
+      formatAllowFrom: ({ allowFrom }) =>
+        allowFrom.map((entry) => String(entry).trim()).filter(Boolean),
+    },
+    threading: {
+      buildToolContext: ({ context, hasRepliedRef }) => ({
+        currentChannelId: context.To?.trim() || undefined,
+        currentThreadTs: context.ReplyToId,
+        hasRepliedRef,
+      }),
     },
   },
 };
