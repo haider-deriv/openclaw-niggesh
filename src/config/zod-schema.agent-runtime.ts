@@ -581,6 +581,14 @@ export const ToolsSchema = z
       })
       .strict()
       .optional(),
+    talently: z
+      .object({
+        enabled: z.boolean().optional(),
+        agentUrl: z.string().optional(),
+        timeoutMs: z.number().int().positive().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
