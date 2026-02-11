@@ -171,13 +171,6 @@ export type ListConversationsResult = {
   count: number;
 };
 
-export type PollUntilDoneResult = {
-  success: true;
-  conversation: StoredConversation;
-  poll_count: number;
-  elapsed_seconds: number;
-};
-
 export type ToolErrorResult = {
   success: false;
   error: string;
@@ -187,5 +180,4 @@ export type ToolResult =
   | InitiateCallResult
   | GetConversationResult
   | ListConversationsResult
-  | PollUntilDoneResult
   | ToolErrorResult;
