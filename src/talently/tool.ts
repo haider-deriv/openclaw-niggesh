@@ -1,8 +1,8 @@
 /**
- * Talently HR Agent Tool
+ * Talently Agent Tool
  *
- * Agent tool for querying recruitment analytics and candidate information
- * via the Talently HR agent.
+ * Agent tool for answering recruitment questions, querying analytics,
+ * and candidate information via the Talently agent.
  */
 
 import { Type } from "@sinclair/typebox";
@@ -37,7 +37,8 @@ function resolveTalentlyConfig(config?: OpenClawConfig): {
   agentUrl?: string;
   timeoutMs: number;
 } {
-  const talentlyCfg = (config?.tools as { talently?: TalentlyConfig } | undefined)?.talently;
+  const talentlyCfg = (config?.tools as { talentlyAgent?: TalentlyConfig } | undefined)
+    ?.talentlyAgent;
   const enabled = talentlyCfg?.enabled !== false;
   const agentUrl = talentlyCfg?.agentUrl || process.env.TALENTLY_AGENT_URL;
   const timeoutMs = talentlyCfg?.timeoutMs || DEFAULT_TIMEOUT_MS;
@@ -45,9 +46,9 @@ function resolveTalentlyConfig(config?: OpenClawConfig): {
 }
 
 /**
- * Create the Talently HR agent tool.
+ * Create the Talently Agent tool.
  *
- * Requires TALENTLY_AGENT_URL environment variable or tools.talently.agentUrl config.
+ * Requires TALENTLY_AGENT_URL environment variable or tools.talentlyAgent.agentUrl config.
  */
 export function createTalentlyTool(options?: { config?: OpenClawConfig }): AnyAgentTool | null {
   const resolved = resolveTalentlyConfig(options?.config);
@@ -57,8 +58,8 @@ export function createTalentlyTool(options?: { config?: OpenClawConfig }): AnyAg
   }
 
   return {
-    label: "Talently HR",
-    name: "talently",
+    label: "Talently Agent",
+    name: "talently_agent",
     description:
       "Query the Talently HR agent for recruitment analytics and candidate information. " +
       "Capabilities: pipeline conversion rates, tier distribution, source effectiveness, " +

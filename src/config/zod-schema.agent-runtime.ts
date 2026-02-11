@@ -581,7 +581,7 @@ export const ToolsSchema = z
       })
       .strict()
       .optional(),
-    talently: z
+    talentlyAgent: z
       .object({
         enabled: z.boolean().optional(),
         agentUrl: z.string().optional(),

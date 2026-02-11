@@ -488,9 +488,9 @@ export type ToolsConfig = {
     /** Request timeout in seconds. Default: 60. */
     timeoutSeconds?: number;
   };
-  /** Talently HR Agent tool configuration. */
-  talently?: {
-    /** Enable Talently HR agent tool (default: true when agentUrl is present). */
+  /** Talently Agent tool configuration (for answering recruitment questions). */
+  talentlyAgent?: {
+    /** Enable Talently Agent tool (default: true when agentUrl is present). */
     enabled?: boolean;
     /** URL of the Talently agent API (e.g., "https://talently-agent.example.com"). */
     agentUrl?: string;

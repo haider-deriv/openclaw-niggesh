@@ -179,12 +179,12 @@ export function createOpenClawTools(options?: {
     tools.push(elevenLabsAgentsTool);
   }
 
-  // Talently HR Agent tool
-  const talentlyTool = createTalentlyTool({
+  // Talently Agent tool (for answering recruitment questions)
+  const talentlyAgentTool = createTalentlyTool({
     config: options?.config,
   });
-  if (talentlyTool) {
-    tools.push(talentlyTool);
+  if (talentlyAgentTool) {
+    tools.push(talentlyAgentTool);
   }
 
   // Talently CV Analysis tool
