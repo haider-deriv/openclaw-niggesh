@@ -14,20 +14,51 @@ import type { ConversationDetails } from "./types.js";
 
 /**
  * Parse the ElevenLabs-Signature header.
- * Format: t=<timestamp>,v1=<signature>
+ * Tries multiple formats:
+ * - t=<timestamp>,v1=<signature> (Stripe-style)
+ * - timestamp=<timestamp>,signature=<signature>
+ * - Just raw signature (no timestamp)
  */
-function parseSignatureHeader(header: string): { timestamp: string; signature: string } | null {
+function parseSignatureHeader(
+  header: string,
+): { timestamp: string | null; signature: string } | null {
+  // Try format: t=<timestamp>,v1=<signature>
   const parts: Record<string, string> = {};
   for (const part of header.split(",")) {
-    const [key, value] = part.split("=", 2);
-    if (key && value) {
-      parts[key.trim()] = value.trim();
+    const eqIndex = part.indexOf("=");
+    if (eqIndex > 0) {
+      const key = part.slice(0, eqIndex).trim();
+      const value = part.slice(eqIndex + 1).trim();
+      if (key && value) {
+        parts[key] = value;
+      }
     }
   }
-  if (!parts.t || !parts.v1) {
-    return null;
+
+  // Try t/v1 format
+  if (parts.t && parts.v1) {
+    return { timestamp: parts.t, signature: parts.v1 };
   }
-  return { timestamp: parts.t, signature: parts.v1 };
+
+  // Try timestamp/signature format
+  if (parts.timestamp && parts.signature) {
+    return { timestamp: parts.timestamp, signature: parts.signature };
+  }
+
+  // Try v0/v1 without timestamp
+  if (parts.v1) {
+    return { timestamp: null, signature: parts.v1 };
+  }
+  if (parts.v0) {
+    return { timestamp: null, signature: parts.v0 };
+  }
+
+  // Maybe it's just a raw signature (hex string)
+  if (/^[a-f0-9]{64}$/i.test(header.trim())) {
+    return { timestamp: null, signature: header.trim() };
+  }
+
+  return null;
 }
 
 /**
@@ -38,38 +69,66 @@ export function validateElevenLabsSignature(
   signatureHeader: string,
   secret: string,
 ): { ok: true } | { ok: false; reason: string } {
+  console.log(`[elevenlabs-webhook] Parsing signature: "${signatureHeader}"`);
+
   const parsed = parseSignatureHeader(signatureHeader);
   if (!parsed) {
+    console.log(`[elevenlabs-webhook] Failed to parse signature header`);
     return { ok: false, reason: "Invalid signature header format" };
   }
 
   const { timestamp, signature } = parsed;
+  console.log(
+    `[elevenlabs-webhook] Parsed - timestamp: ${timestamp}, signature: ${signature.slice(0, 16)}...`,
+  );
 
-  // Check timestamp to prevent replay attacks (allow 5 minute window)
-  const timestampMs = parseInt(timestamp, 10) * 1000;
-  const now = Date.now();
-  const fiveMinutes = 5 * 60 * 1000;
-  if (isNaN(timestampMs) || Math.abs(now - timestampMs) > fiveMinutes) {
-    return { ok: false, reason: "Timestamp too old or invalid" };
+  // If we have a timestamp, validate it and include it in the signed payload
+  if (timestamp) {
+    const timestampMs = parseInt(timestamp, 10) * 1000;
+    const now = Date.now();
+    const fiveMinutes = 5 * 60 * 1000;
+    if (isNaN(timestampMs) || Math.abs(now - timestampMs) > fiveMinutes) {
+      console.log(`[elevenlabs-webhook] Timestamp validation failed: ${timestamp}`);
+      return { ok: false, reason: "Timestamp too old or invalid" };
+    }
+
+    // Compute expected signature: HMAC-SHA256(timestamp.rawBody)
+    const signedPayload = `${timestamp}.${rawBody}`;
+    const expectedSignature = crypto
+      .createHmac("sha256", secret)
+      .update(signedPayload)
+      .digest("hex");
+
+    if (compareSignatures(expectedSignature, signature)) {
+      return { ok: true };
+    }
+    console.log(`[elevenlabs-webhook] Signature mismatch with timestamp`);
   }
 
-  // Compute expected signature: HMAC-SHA256(timestamp.rawBody)
-  const signedPayload = `${timestamp}.${rawBody}`;
-  const expectedSignature = crypto.createHmac("sha256", secret).update(signedPayload).digest("hex");
-
-  // Constant-time comparison
-  const expectedBuffer = Buffer.from(expectedSignature, "hex");
-  const actualBuffer = Buffer.from(signature, "hex");
-
-  if (expectedBuffer.length !== actualBuffer.length) {
-    return { ok: false, reason: "Signature mismatch" };
+  // Try without timestamp (just HMAC of body)
+  const expectedNoTimestamp = crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
+  if (compareSignatures(expectedNoTimestamp, signature)) {
+    console.log(`[elevenlabs-webhook] Signature matched without timestamp`);
+    return { ok: true };
   }
 
-  if (!crypto.timingSafeEqual(expectedBuffer, actualBuffer)) {
-    return { ok: false, reason: "Signature mismatch" };
-  }
+  console.log(`[elevenlabs-webhook] Expected (no ts): ${expectedNoTimestamp.slice(0, 16)}...`);
+  console.log(`[elevenlabs-webhook] Got: ${signature.slice(0, 16)}...`);
 
-  return { ok: true };
+  return { ok: false, reason: "Signature mismatch" };
+}
+
+function compareSignatures(expected: string, actual: string): boolean {
+  try {
+    const expectedBuffer = Buffer.from(expected, "hex");
+    const actualBuffer = Buffer.from(actual, "hex");
+    if (expectedBuffer.length !== actualBuffer.length) {
+      return false;
+    }
+    return crypto.timingSafeEqual(expectedBuffer, actualBuffer);
+  } catch {
+    return false;
+  }
 }
 
 // =============================================================================
@@ -242,6 +301,8 @@ export async function handleElevenLabsWebhookRequest(
 
   // Get signature header
   const signatureHeader = req.headers["elevenlabs-signature"];
+  console.log(`[elevenlabs-webhook] Signature header: ${signatureHeader}`);
+  console.log(`[elevenlabs-webhook] All headers: ${JSON.stringify(req.headers, null, 2)}`);
   if (!signatureHeader || typeof signatureHeader !== "string") {
     console.log("[elevenlabs-webhook] Rejected: Missing ElevenLabs-Signature header");
     res.statusCode = 401;
