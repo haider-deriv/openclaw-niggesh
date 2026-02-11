@@ -578,6 +578,8 @@ export const ToolsSchema = z
         defaultDynamicVariables: z.record(z.string(), z.string()).optional(),
         baseUrl: z.string().optional(),
         timeoutSeconds: z.number().int().positive().optional(),
+        webhookSecret: z.string().optional(),
+        webhookPath: z.string().optional(),
       })
       .strict()
       .optional(),
