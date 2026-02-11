@@ -16,6 +16,10 @@ export type ElevenLabsAgentsConfig = {
   defaultDynamicVariables?: Record<string, string>;
   baseUrl?: string;
   timeoutSeconds?: number;
+  /** Webhook secret from ElevenLabs dashboard for HMAC verification */
+  webhookSecret?: string;
+  /** Webhook endpoint path (default: /elevenlabs/webhook) */
+  webhookPath?: string;
 };
 
 // =============================================================================

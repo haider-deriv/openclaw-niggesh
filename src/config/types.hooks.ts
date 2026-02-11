@@ -110,11 +110,6 @@ export type InternalHooksConfig = {
   installs?: Record<string, HookInstallRecord>;
 };
 
-export type HooksElevenLabsConfig = {
-  /** DANGEROUS: Disable external content safety wrapping for ElevenLabs hooks. */
-  allowUnsafeExternalContent?: boolean;
-};
-
 export type HooksConfig = {
   enabled?: boolean;
   path?: string;
@@ -124,7 +119,6 @@ export type HooksConfig = {
   transformsDir?: string;
   mappings?: HookMappingConfig[];
   gmail?: HooksGmailConfig;
-  elevenlabs?: HooksElevenLabsConfig;
   /** Internal agent event hooks */
   internal?: InternalHooksConfig;
 };

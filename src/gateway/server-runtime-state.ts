@@ -13,6 +13,11 @@ import type { GatewayTlsRuntime } from "./server/tls.js";
 import type { GatewayWsClient } from "./server/ws-types.js";
 import { CANVAS_HOST_PATH } from "../canvas-host/a2ui.js";
 import { type CanvasHostHandler, createCanvasHostHandler } from "../canvas-host/server.js";
+import { resolveMainSessionKeyFromConfig } from "../config/sessions.js";
+import { resolveElevenLabsAgentsConfig } from "../elevenlabs-agents/config.js";
+import { registerElevenLabsWebhookHandler } from "../elevenlabs-agents/webhook.js";
+import { requestHeartbeatNow } from "../infra/heartbeat-wake.js";
+import { enqueueSystemEvent } from "../infra/system-events.js";
 import { resolveGatewayListenHosts } from "./net.js";
 import { createGatewayBroadcaster } from "./server-broadcast.js";
 import {
@@ -117,6 +122,26 @@ export async function createGatewayRuntimeState(params: {
     port: params.port,
     logHooks: params.logHooks,
   });
+
+  // Register ElevenLabs webhook handler if configured
+  const elevenLabsConfig = resolveElevenLabsAgentsConfig(params.cfg);
+  if (elevenLabsConfig.webhookSecret) {
+    registerElevenLabsWebhookHandler({
+      webhookSecret: elevenLabsConfig.webhookSecret,
+      webhookPath: elevenLabsConfig.webhookPath,
+      onWebhook: (payload) => {
+        const mainSessionKey = resolveMainSessionKeyFromConfig();
+        const statusText = payload.status === "done" ? "completed" : payload.status;
+        const message = `ElevenLabs call ${statusText}. Conversation ID: ${payload.conversationId}. Use elevenlabs_agents tool with action "get_conversation" to retrieve details.`;
+        enqueueSystemEvent(message, { sessionKey: mainSessionKey });
+        requestHeartbeatNow({ reason: `elevenlabs:${payload.conversationId}` });
+        params.log.info(
+          `elevenlabs webhook received: ${payload.conversationId} (${payload.status})`,
+        );
+      },
+    });
+    params.log.info(`elevenlabs webhook enabled at ${elevenLabsConfig.webhookPath}`);
+  }
 
   const handlePluginRequest = createGatewayPluginRequestHandler({
     registry: params.pluginRegistry,

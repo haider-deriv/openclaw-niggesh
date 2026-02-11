@@ -9,6 +9,7 @@ import type { ElevenLabsAgentsConfig } from "./types.js";
 
 const DEFAULT_BASE_URL = "https://api.elevenlabs.io";
 const DEFAULT_TIMEOUT_SECONDS = 60;
+const DEFAULT_WEBHOOK_PATH = "/elevenlabs/webhook";
 
 export type ResolvedElevenLabsAgentsConfig = {
   enabled: boolean;
@@ -19,6 +20,8 @@ export type ResolvedElevenLabsAgentsConfig = {
   baseUrl: string;
   timeoutSeconds: number;
   apiKeySource: "config" | "env" | "none";
+  webhookSecret?: string;
+  webhookPath: string;
 };
 
 /**
@@ -81,6 +84,21 @@ export function resolveElevenLabsAgentsConfig(cfg: OpenClawConfig): ResolvedElev
   // Resolve default dynamic variables
   const defaultDynamicVariables = config?.defaultDynamicVariables ?? {};
 
+  // Resolve webhook config
+  let webhookSecret = config?.webhookSecret?.trim();
+  if (!webhookSecret) {
+    webhookSecret = process.env.ELEVENLABS_WEBHOOK_SECRET?.trim();
+  }
+
+  let webhookPath = config?.webhookPath?.trim();
+  if (!webhookPath) {
+    webhookPath = process.env.ELEVENLABS_WEBHOOK_PATH?.trim() || DEFAULT_WEBHOOK_PATH;
+  }
+  // Ensure path starts with /
+  if (!webhookPath.startsWith("/")) {
+    webhookPath = `/${webhookPath}`;
+  }
+
   return {
     enabled,
     apiKey,
@@ -90,6 +108,8 @@ export function resolveElevenLabsAgentsConfig(cfg: OpenClawConfig): ResolvedElev
     baseUrl,
     timeoutSeconds,
     apiKeySource,
+    webhookSecret,
+    webhookPath,
   };
 }
 
