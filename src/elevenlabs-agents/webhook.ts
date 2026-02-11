@@ -229,8 +229,11 @@ export async function handleElevenLabsWebhookRequest(
     return false;
   }
 
+  console.log(`[elevenlabs-webhook] Received ${req.method} request to ${url.pathname}`);
+
   // Only accept POST
   if (req.method !== "POST") {
+    console.log(`[elevenlabs-webhook] Rejected: Method ${req.method} not allowed`);
     res.statusCode = 405;
     res.setHeader("Allow", "POST");
     res.end("Method Not Allowed");
@@ -240,6 +243,7 @@ export async function handleElevenLabsWebhookRequest(
   // Get signature header
   const signatureHeader = req.headers["elevenlabs-signature"];
   if (!signatureHeader || typeof signatureHeader !== "string") {
+    console.log("[elevenlabs-webhook] Rejected: Missing ElevenLabs-Signature header");
     res.statusCode = 401;
     res.setHeader("Content-Type", "application/json");
     res.end(JSON.stringify({ error: "Missing ElevenLabs-Signature header" }));
@@ -251,6 +255,7 @@ export async function handleElevenLabsWebhookRequest(
   try {
     rawBody = await readRawBody(req, maxBodyBytes);
   } catch (err) {
+    console.log("[elevenlabs-webhook] Rejected: Payload too large");
     res.statusCode = 413;
     res.setHeader("Content-Type", "application/json");
     res.end(JSON.stringify({ error: "Payload too large" }));
@@ -260,6 +265,7 @@ export async function handleElevenLabsWebhookRequest(
   // Verify signature
   const verification = validateElevenLabsSignature(rawBody, signatureHeader, webhookSecret);
   if (!verification.ok) {
+    console.log(`[elevenlabs-webhook] Rejected: ${verification.reason}`);
     res.statusCode = 401;
     res.setHeader("Content-Type", "application/json");
     res.end(JSON.stringify({ error: verification.reason }));
@@ -271,6 +277,7 @@ export async function handleElevenLabsWebhookRequest(
   try {
     payload = JSON.parse(rawBody) as ElevenLabsWebhookPayload;
   } catch {
+    console.log("[elevenlabs-webhook] Rejected: Invalid JSON");
     res.statusCode = 400;
     res.setHeader("Content-Type", "application/json");
     res.end(JSON.stringify({ error: "Invalid JSON" }));
@@ -280,11 +287,16 @@ export async function handleElevenLabsWebhookRequest(
   // Normalize and validate
   const normalized = normalizePayload(payload);
   if (!normalized) {
+    console.log("[elevenlabs-webhook] Rejected: Missing conversation_id in payload");
     res.statusCode = 400;
     res.setHeader("Content-Type", "application/json");
     res.end(JSON.stringify({ error: "Missing conversation_id" }));
     return true;
   }
+
+  console.log(
+    `[elevenlabs-webhook] Valid webhook: ${normalized.conversationId} (${normalized.status})`,
+  );
 
   // Respond immediately (ElevenLabs expects quick 200)
   res.statusCode = 200;
