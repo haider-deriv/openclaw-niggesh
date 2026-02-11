@@ -13,7 +13,6 @@ import {
   initiateOutboundCall,
   getConversation,
   listConversations,
-  pollUntilDone,
   classifyElevenLabsError,
   type ElevenLabsClientOptions,
 } from "./client.js";
@@ -37,8 +36,7 @@ import {
 // Using a single object with action field (avoiding Type.Union per codebase convention)
 const ElevenLabsAgentsSchema = Type.Object({
   action: Type.String({
-    description:
-      'Action to perform: "initiate_call", "get_conversation", "list_conversations", or "poll_until_done"',
+    description: 'Action to perform: "initiate_call", "get_conversation", or "list_conversations"',
   }),
   // initiate_call params
   to_number: Type.Optional(
@@ -81,10 +79,10 @@ const ElevenLabsAgentsSchema = Type.Object({
       },
     ),
   ),
-  // get_conversation / poll_until_done params
+  // get_conversation params
   conversation_id: Type.Optional(
     Type.String({
-      description: "Conversation ID to retrieve or poll",
+      description: "Conversation ID to retrieve",
     }),
   ),
   // list_conversations params
@@ -98,21 +96,6 @@ const ElevenLabsAgentsSchema = Type.Object({
   status: Type.Optional(
     Type.String({
       description: 'Filter by status (e.g., "done", "pending", "in-progress")',
-    }),
-  ),
-  // poll_until_done params
-  timeout_seconds: Type.Optional(
-    Type.Number({
-      description: "Maximum time to wait for call completion (default: 300)",
-      minimum: 10,
-      maximum: 600,
-    }),
-  ),
-  poll_interval_seconds: Type.Optional(
-    Type.Number({
-      description: "Seconds between status checks (default: 10)",
-      minimum: 5,
-      maximum: 60,
     }),
   ),
 });
@@ -190,7 +173,7 @@ async function handleInitiateCall(params: {
       conversation_id: conversationId,
       status: response.status ?? "initiated",
       to_number: toNumber,
-      message: `Call initiated to ${toNumber}. Use get_conversation or poll_until_done with conversation_id "${conversationId}" to check results.`,
+      message: `Call initiated to ${toNumber}. Use get_conversation with conversation_id "${conversationId}" to check status and results.`,
     });
   } catch (err) {
     const classified = classifyElevenLabsError(err);
@@ -278,54 +261,6 @@ async function handleListConversations(params: {
   }
 }
 
-async function handlePollUntilDone(params: {
-  clientOpts: ElevenLabsClientOptions;
-  workspaceDir: string;
-  conversationId?: string;
-  timeoutSeconds?: number;
-  pollIntervalSeconds?: number;
-}) {
-  const { clientOpts, workspaceDir, conversationId, timeoutSeconds, pollIntervalSeconds } = params;
-
-  if (!conversationId) {
-    return jsonResult({
-      success: false,
-      error: "conversation_id is required for poll_until_done action",
-    });
-  }
-
-  try {
-    const result = await pollUntilDone(clientOpts, conversationId, {
-      timeoutSeconds: timeoutSeconds ?? 300,
-      pollIntervalSeconds: pollIntervalSeconds ?? 10,
-    });
-
-    // Update stored conversation with final state
-    const stored = await updateConversationFromApi(workspaceDir, result.details);
-
-    const isDone = result.details.status === "done";
-    const message = isDone
-      ? `Call completed after ${result.elapsedSeconds}s (${result.pollCount} polls)`
-      : `Polling timed out after ${result.elapsedSeconds}s. Status: ${result.details.status}`;
-
-    return jsonResult({
-      success: isDone,
-      conversation: stored,
-      poll_count: result.pollCount,
-      elapsed_seconds: result.elapsedSeconds,
-      message,
-    });
-  } catch (err) {
-    const classified = classifyElevenLabsError(err);
-    return jsonResult({
-      success: false,
-      error: classified.userFriendlyMessage,
-      errorType: classified.type,
-      canRetry: classified.isTransient,
-    });
-  }
-}
-
 // =============================================================================
 // Tool Factory
 // =============================================================================
@@ -356,8 +291,8 @@ export function createElevenLabsAgentsTool(options?: {
     name: "elevenlabs_agents",
     description:
       "Make outbound phone calls using ElevenLabs Conversational AI agents. " +
-      "Actions: initiate_call (start a call), get_conversation (get call status/transcript), " +
-      "list_conversations (list stored calls), poll_until_done (wait for call completion). " +
+      "Actions: initiate_call (start a call, returns immediately), get_conversation (get call status/transcript), " +
+      "list_conversations (list stored calls). " +
       "Pass dynamic_variables to customize the agent's context (e.g., candidate_name, position).",
     parameters: ElevenLabsAgentsSchema,
     execute: async (_toolCallId, args) => {
@@ -414,21 +349,10 @@ export function createElevenLabsAgentsTool(options?: {
             status: readStringParam(params, "status"),
           });
 
-        case "poll_until_done":
-          return handlePollUntilDone({
-            clientOpts,
-            workspaceDir,
-            conversationId: readStringParam(params, "conversation_id"),
-            timeoutSeconds: readNumberParam(params, "timeout_seconds", { integer: true }),
-            pollIntervalSeconds: readNumberParam(params, "poll_interval_seconds", {
-              integer: true,
-            }),
-          });
-
         default:
           return jsonResult({
             success: false,
-            error: `Unknown action: ${action}. Valid actions: initiate_call, get_conversation, list_conversations, poll_until_done`,
+            error: `Unknown action: ${action}. Valid actions: initiate_call, get_conversation, list_conversations`,
           });
       }
     },
