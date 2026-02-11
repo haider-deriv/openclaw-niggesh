@@ -11,7 +11,7 @@
 export type TalentlyCVAnalysisConfig = {
   enabled?: boolean;
   apiUrl?: string;
-  authToken?: string;
+  apiKey?: string;
   timeoutMs?: number;
 };
 

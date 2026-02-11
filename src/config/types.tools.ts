@@ -503,8 +503,8 @@ export type ToolsConfig = {
     enabled?: boolean;
     /** URL of the CV Analysis API (e.g., "https://skillssue.example.com/api"). */
     apiUrl?: string;
-    /** JWT auth token for API authentication. */
-    authToken?: string;
+    /** API key for authentication (from generate_api_key.py script). */
+    apiKey?: string;
     /** Request timeout in milliseconds. Default: 120000. */
     timeoutMs?: number;
   };

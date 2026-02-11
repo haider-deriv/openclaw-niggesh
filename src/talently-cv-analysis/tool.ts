@@ -80,7 +80,7 @@ export function createTalentlyCVAnalysisTool(options?: {
           error: `Talently CV Analysis not configured. Missing: ${missing.join(", ")}`,
           configuration_help:
             "Set apiUrl in tools.talentlyCvAnalysis or TALENTLY_CV_ANALYSIS_API_URL env var. " +
-            "Optionally set authToken (TALENTLY_CV_ANALYSIS_AUTH_TOKEN) for authentication.",
+            "Set apiKey in tools.talentlyCvAnalysis or TALENTLY_CV_ANALYSIS_API_KEY env var.",
         });
       }
 

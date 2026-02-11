@@ -15,7 +15,7 @@ import type { BatchJobCreateResponse } from "./types.js";
 
 export type TalentlyCVAnalysisClientOptions = {
   apiUrl: string;
-  authToken?: string;
+  apiKey?: string;
   timeoutMs: number;
 };
 
@@ -31,7 +31,7 @@ export function buildClientOptions(
   }
   return {
     apiUrl: config.apiUrl,
-    authToken: config.authToken,
+    apiKey: config.apiKey,
     timeoutMs: config.timeoutMs,
   };
 }
@@ -76,10 +76,10 @@ export async function submitCVsForAnalysis(
       formData.append("is_manager", String(params.isManager));
     }
 
-    // Build headers
+    // Build headers - use X-API-Key for API key auth
     const headers: Record<string, string> = {};
-    if (opts.authToken) {
-      headers["Authorization"] = `Bearer ${opts.authToken}`;
+    if (opts.apiKey) {
+      headers["X-API-Key"] = opts.apiKey;
     }
 
     // Make request

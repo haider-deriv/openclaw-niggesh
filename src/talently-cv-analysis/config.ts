@@ -12,7 +12,7 @@ const DEFAULT_TIMEOUT_MS = 120_000; // 2 minutes for file uploads
 export type ResolvedTalentlyCVAnalysisConfig = {
   enabled: boolean;
   apiUrl?: string;
-  authToken?: string;
+  apiKey?: string;
   timeoutMs: number;
 };
 
@@ -40,9 +40,9 @@ export function resolveTalentlyCVAnalysisConfig(
   }
 
   // Resolve auth token from config or env
-  let authToken = config?.authToken?.trim();
-  if (!authToken) {
-    authToken = process.env.TALENTLY_CV_ANALYSIS_AUTH_TOKEN?.trim();
+  let apiKey = config?.apiKey?.trim();
+  if (!apiKey) {
+    apiKey = process.env.TALENTLY_CV_ANALYSIS_API_KEY?.trim();
   }
 
   // Resolve timeout
@@ -51,7 +51,7 @@ export function resolveTalentlyCVAnalysisConfig(
   return {
     enabled,
     apiUrl,
-    authToken,
+    apiKey,
     timeoutMs,
   };
 }
@@ -71,8 +71,8 @@ export function getMissingCredentials(config: ResolvedTalentlyCVAnalysisConfig):
   if (!config.apiUrl) {
     missing.push("apiUrl (or TALENTLY_CV_ANALYSIS_API_URL env var)");
   }
-  if (!config.authToken) {
-    missing.push("authToken (or TALENTLY_CV_ANALYSIS_AUTH_TOKEN env var)");
+  if (!config.apiKey) {
+    missing.push("apiKey (or TALENTLY_CV_ANALYSIS_API_KEY env var)");
   }
   return missing;
 }

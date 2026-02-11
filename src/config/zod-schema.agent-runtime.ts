@@ -593,7 +593,7 @@ export const ToolsSchema = z
       .object({
         enabled: z.boolean().optional(),
         apiUrl: z.string().optional(),
-        authToken: z.string().optional(),
+        apiKey: z.string().optional(),
         timeoutMs: z.number().int().positive().optional(),
       })
       .strict()
