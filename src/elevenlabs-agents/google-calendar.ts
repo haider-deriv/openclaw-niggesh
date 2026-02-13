@@ -62,25 +62,43 @@ export type SendInterviewInviteResult = {
 };
 
 /**
+ * Resolve gog environment variables from config or process environment.
+ */
+export function resolveGogEnv(cfg: OpenClawConfig): Record<string, string> | undefined {
+  const skillsGogEnv = cfg.skills?.entries?.gog?.env;
+  const gogEnv: Record<string, string> = {};
+
+  // GOG_ACCOUNT
+  const account = (skillsGogEnv?.GOG_ACCOUNT as string)?.trim() || process.env.GOG_ACCOUNT?.trim();
+  if (!account) {
+    return undefined; // No account configured
+  }
+  gogEnv.GOG_ACCOUNT = account;
+
+  // GOG_KEYRING_BACKEND (file backend for non-interactive use)
+  const keyringBackend =
+    (skillsGogEnv?.GOG_KEYRING_BACKEND as string)?.trim() ||
+    process.env.GOG_KEYRING_BACKEND?.trim();
+  if (keyringBackend) {
+    gogEnv.GOG_KEYRING_BACKEND = keyringBackend;
+  }
+
+  // GOG_KEYRING_PASSWORD (for file backend)
+  const keyringPassword =
+    (skillsGogEnv?.GOG_KEYRING_PASSWORD as string) || process.env.GOG_KEYRING_PASSWORD;
+  if (keyringPassword) {
+    gogEnv.GOG_KEYRING_PASSWORD = keyringPassword;
+  }
+
+  return gogEnv;
+}
+
+/**
  * Resolve the gog account from config or environment.
  */
 export function resolveGogAccount(cfg: OpenClawConfig): string | undefined {
-  // First check skills.entries.gog.env.GOG_ACCOUNT
-  const skillsGogEnv = cfg.skills?.entries?.gog?.env;
-  if (skillsGogEnv && typeof skillsGogEnv.GOG_ACCOUNT === "string") {
-    const account = skillsGogEnv.GOG_ACCOUNT.trim();
-    if (account) {
-      return account;
-    }
-  }
-
-  // Fallback to environment variable
-  const envAccount = process.env.GOG_ACCOUNT?.trim();
-  if (envAccount) {
-    return envAccount;
-  }
-
-  return undefined;
+  const gogEnv = resolveGogEnv(cfg);
+  return gogEnv?.GOG_ACCOUNT;
 }
 
 /**
@@ -165,7 +183,7 @@ function shellEscape(str: string): string {
  */
 async function runGogCommand(
   args: string[],
-  gogAccount: string,
+  gogEnv: Record<string, string>,
   log: { info: (msg: string) => void; warn: (msg: string) => void },
 ): Promise<{ ok: boolean; stdout: string; stderr: string; error?: string }> {
   const { shell, args: shellArgs } = getShellConfig();
@@ -174,12 +192,15 @@ async function runGogCommand(
   const gogCmd = ["gog", ...args.map(shellEscape)].join(" ");
   const cmdStr = gogCmd;
   log.info(`[gog] Running: ${cmdStr}`);
-  log.info(`[gog] Account: ${gogAccount}`);
+  log.info(`[gog] Account: ${gogEnv.GOG_ACCOUNT}`);
   log.info(`[gog] Shell: ${shell} ${shellArgs.join(" ")}`);
+  if (gogEnv.GOG_KEYRING_BACKEND) {
+    log.info(`[gog] Keyring backend: ${gogEnv.GOG_KEYRING_BACKEND}`);
+  }
 
   try {
     const { stdout, stderr } = await execFileAsync(shell, [...shellArgs, gogCmd], {
-      env: { ...process.env, GOG_ACCOUNT: gogAccount },
+      env: { ...process.env, ...gogEnv },
       timeout: 30000, // 30 second timeout
     });
     if (stdout) {
@@ -216,7 +237,7 @@ async function runGogCommand(
  */
 export async function sendInterviewInvite(
   params: SendInterviewInviteParams,
-  gogAccount: string,
+  gogEnv: Record<string, string>,
   log: { info: (msg: string) => void; warn: (msg: string) => void },
 ): Promise<SendInterviewInviteResult> {
   const {
@@ -267,7 +288,7 @@ export async function sendInterviewInvite(
       ];
 
       log.info(`Creating calendar event for ${candidateName} at ${interviewTimestamp}`);
-      const calendarResult = await runGogCommand(calendarArgs, gogAccount, log);
+      const calendarResult = await runGogCommand(calendarArgs, gogEnv, log);
 
       if (calendarResult.ok) {
         calendarEventCreated = true;
@@ -305,7 +326,7 @@ export async function sendInterviewInvite(
   ];
 
   log.info(`Sending confirmation email to ${candidateEmail}`);
-  const emailResult = await runGogCommand(emailArgs, gogAccount, log);
+  const emailResult = await runGogCommand(emailArgs, gogEnv, log);
 
   if (emailResult.ok) {
     emailSent = true;

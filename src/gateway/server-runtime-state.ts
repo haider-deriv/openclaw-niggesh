@@ -19,7 +19,7 @@ import { DirectCallFunctionName } from "../cron/types.js";
 import { resolveElevenLabsAgentsConfig } from "../elevenlabs-agents/config.js";
 import {
   parseEmailTemplateType,
-  resolveGogAccount,
+  resolveGogEnv,
   sendInterviewInvite,
 } from "../elevenlabs-agents/google-calendar.js";
 import { getStoredConversation, saveConversationFromWebhook } from "../elevenlabs-agents/store.js";
@@ -228,8 +228,8 @@ export async function createGatewayRuntimeState(params: {
         // Send email if candidate_email is present (calendar invite is optional)
         if (candidateEmail && typeof candidateEmail === "string" && candidateEmail.trim()) {
           try {
-            const gogAccount = resolveGogAccount(params.cfg);
-            if (gogAccount) {
+            const gogEnv = resolveGogEnv(params.cfg);
+            if (gogEnv) {
               // Get stored conversation to retrieve candidate name
               const storedConv = await getStoredConversation(workspaceDir, payload.conversationId);
               const candidateName =
@@ -250,7 +250,7 @@ export async function createGatewayRuntimeState(params: {
                   conversationId: payload.conversationId,
                   templateType,
                 },
-                gogAccount,
+                gogEnv,
                 params.log,
               );
 
@@ -273,7 +273,7 @@ export async function createGatewayRuntimeState(params: {
               }
             } else {
               params.log.warn(
-                `elevenlabs webhook: candidate email present but GOG_ACCOUNT not configured`,
+                `elevenlabs webhook: candidate email present but gog not configured (missing GOG_ACCOUNT)`,
               );
             }
           } catch (err) {
