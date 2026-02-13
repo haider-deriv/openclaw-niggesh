@@ -211,7 +211,7 @@ export async function createGatewayRuntimeState(params: {
           }
         }
 
-        // Check for calendar invite data and send interview invite immediately
+        // Check for email/calendar invite data and send immediately
         const candidateEmailItem = dataCollectionList?.find(
           (item) => item.data_collection_id === "candidate_email",
         );
@@ -225,14 +225,8 @@ export async function createGatewayRuntimeState(params: {
         const calendarInviteTime = calendarInviteTimeItem?.value;
         const templateType = parseEmailTemplateType(emailTemplateTypeItem?.value);
 
-        if (
-          candidateEmail &&
-          typeof candidateEmail === "string" &&
-          candidateEmail.trim() &&
-          calendarInviteTime &&
-          typeof calendarInviteTime === "string" &&
-          calendarInviteTime.trim()
-        ) {
+        // Send email if candidate_email is present (calendar invite is optional)
+        if (candidateEmail && typeof candidateEmail === "string" && candidateEmail.trim()) {
           try {
             const gogAccount = resolveGogAccount(params.cfg);
             if (gogAccount) {
@@ -241,11 +235,17 @@ export async function createGatewayRuntimeState(params: {
               const candidateName =
                 storedConv?.dynamic_variables?.candidate_name || candidateEmail.split("@")[0];
 
+              // Only pass interviewTimestamp if it's a valid string
+              const interviewTimestamp =
+                calendarInviteTime && typeof calendarInviteTime === "string"
+                  ? calendarInviteTime.trim() || undefined
+                  : undefined;
+
               const inviteResult = await sendInterviewInvite(
                 {
                   candidateName,
                   candidateEmail: candidateEmail.trim(),
-                  interviewTimestamp: calendarInviteTime.trim(),
+                  interviewTimestamp,
                   calendarId: elevenLabsConfig.calendarId,
                   conversationId: payload.conversationId,
                   templateType,
@@ -256,22 +256,24 @@ export async function createGatewayRuntimeState(params: {
 
               if (inviteResult.ok) {
                 params.log.info(
-                  `elevenlabs webhook: sent interview invite to ${candidateEmail} for ${calendarInviteTime}`,
+                  `elevenlabs webhook: processed email/calendar for ${candidateEmail}`,
                 );
-                if (inviteResult.calendarEventCreated) {
-                  automatedActions.push(`calendar invite sent to ${candidateEmail}`);
+                if (inviteResult.calendarEventCreated && interviewTimestamp) {
+                  automatedActions.push(
+                    `calendar invite sent to ${candidateEmail} for ${interviewTimestamp}`,
+                  );
                 }
                 if (inviteResult.emailSent) {
-                  automatedActions.push(`confirmation email sent to ${candidateEmail}`);
+                  automatedActions.push(`email sent to ${candidateEmail}`);
                 }
               } else {
                 params.log.warn(
-                  `elevenlabs webhook: failed to send interview invite: ${inviteResult.error}`,
+                  `elevenlabs webhook: failed to send email/calendar: ${inviteResult.error}`,
                 );
               }
             } else {
               params.log.warn(
-                `elevenlabs webhook: calendar invite data present but GOG_ACCOUNT not configured`,
+                `elevenlabs webhook: candidate email present but GOG_ACCOUNT not configured`,
               );
             }
           } catch (err) {

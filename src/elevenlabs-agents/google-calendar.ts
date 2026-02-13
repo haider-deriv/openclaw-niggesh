@@ -44,8 +44,8 @@ const INTERVIEW_DURATION_MINUTES = 30;
 export type SendInterviewInviteParams = {
   candidateName: string;
   candidateEmail: string;
-  /** ISO 8601 timestamp for the interview start time */
-  interviewTimestamp: string;
+  /** ISO 8601 timestamp for the interview start time (optional - skip calendar if not provided) */
+  interviewTimestamp?: string;
   /** Calendar ID (default: "primary") */
   calendarId: string;
   /** Conversation ID for reference */
@@ -188,7 +188,8 @@ async function runGogCommand(
 }
 
 /**
- * Send interview invite via Google Calendar and confirmation email via Gmail.
+ * Send interview invite via Google Calendar and/or confirmation email via Gmail.
+ * Calendar invite is only created if interviewTimestamp is provided.
  */
 export async function sendInterviewInvite(
   params: SendInterviewInviteParams,
@@ -204,58 +205,69 @@ export async function sendInterviewInvite(
     templateType = EmailTemplateType.INTERVIEW_CONFIRMATION,
   } = params;
 
-  // Parse and validate timestamp
-  const startDate = new Date(interviewTimestamp);
-  if (isNaN(startDate.getTime())) {
-    return { ok: false, error: `Invalid interview timestamp: ${interviewTimestamp}` };
-  }
-
-  const endIso = calculateEndTime(interviewTimestamp, INTERVIEW_DURATION_MINUTES);
-  const { date: interviewDate, time: interviewTime } = formatDateForEmail(startDate);
-
   let calendarEventCreated = false;
   let emailSent = false;
+  let interviewDate = "";
+  let interviewTime = "";
 
-  // 1. Create calendar event with attendee
-  const eventSummary = `Interview with ${candidateName}`;
-  const eventDescription = conversationId
-    ? `Scheduled from ElevenLabs conversation: ${conversationId}`
-    : "Scheduled interview";
+  // 1. Create calendar event (only if timestamp provided)
+  if (interviewTimestamp) {
+    const startDate = new Date(interviewTimestamp);
+    if (isNaN(startDate.getTime())) {
+      log.warn(`Invalid interview timestamp: ${interviewTimestamp}, skipping calendar`);
+    } else {
+      const endIso = calculateEndTime(interviewTimestamp, INTERVIEW_DURATION_MINUTES);
+      const formatted = formatDateForEmail(startDate);
+      interviewDate = formatted.date;
+      interviewTime = formatted.time;
 
-  const calendarArgs = [
-    "calendar",
-    "create",
-    calendarId,
-    "--summary",
-    eventSummary,
-    "--from",
-    interviewTimestamp,
-    "--to",
-    endIso,
-    "--description",
-    eventDescription,
-    "--add-attendee",
-    candidateEmail,
-    "--no-input",
-  ];
+      const eventSummary = `Interview with ${candidateName}`;
+      const eventDescription = conversationId
+        ? `Scheduled from ElevenLabs conversation: ${conversationId}`
+        : "Scheduled interview";
 
-  log.info(`Creating calendar event for ${candidateName} at ${interviewTimestamp}`);
-  const calendarResult = await runGogCommand(calendarArgs, gogAccount, log);
+      const calendarArgs = [
+        "calendar",
+        "create",
+        calendarId,
+        "--summary",
+        eventSummary,
+        "--from",
+        interviewTimestamp,
+        "--to",
+        endIso,
+        "--description",
+        eventDescription,
+        "--add-attendee",
+        candidateEmail,
+        "--no-input",
+      ];
 
-  if (calendarResult.ok) {
-    calendarEventCreated = true;
-    log.info(`Calendar event created for ${candidateName}`);
+      log.info(`Creating calendar event for ${candidateName} at ${interviewTimestamp}`);
+      const calendarResult = await runGogCommand(calendarArgs, gogAccount, log);
+
+      if (calendarResult.ok) {
+        calendarEventCreated = true;
+        log.info(`Calendar event created for ${candidateName}`);
+      } else {
+        log.warn(`Failed to create calendar event: ${calendarResult.error}`);
+      }
+    }
   } else {
-    log.warn(`Failed to create calendar event: ${calendarResult.error}`);
-    // Continue to try sending email even if calendar fails
+    log.info(`No interview timestamp provided, skipping calendar invite`);
   }
 
-  // 2. Send confirmation email
+  // 2. Send email
   const emailHtml = buildEmailHtml(templateType, {
     candidateName,
     interviewDate,
     interviewTime,
   });
+
+  // Use different subject based on whether we have a scheduled date
+  const emailSubject = interviewDate
+    ? `Interview Scheduled - ${interviewDate}`
+    : `Follow-up from Deriv`;
 
   const emailArgs = [
     "gmail",
@@ -263,7 +275,7 @@ export async function sendInterviewInvite(
     "--to",
     candidateEmail,
     "--subject",
-    `Interview Scheduled - ${interviewDate}`,
+    emailSubject,
     "--body-html",
     emailHtml,
     "--no-input",
@@ -280,10 +292,10 @@ export async function sendInterviewInvite(
   }
 
   // Return result
-  if (!calendarEventCreated && !emailSent) {
+  if (!emailSent) {
     return {
       ok: false,
-      error: `Both calendar and email failed. Calendar: ${calendarResult.error}. Email: ${emailResult.error}`,
+      error: `Email failed: ${emailResult.error}`,
       calendarEventCreated,
       emailSent,
     };
