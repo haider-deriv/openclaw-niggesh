@@ -160,6 +160,9 @@ export async function createGatewayRuntimeState(params: {
           | Array<{ data_collection_id: string; value: unknown }>
           | undefined;
 
+        // Track automated actions for agent notification
+        const automatedActions: string[] = [];
+
         // Check for callback_time and schedule automatic callback
         const callbackTimeItem = dataCollectionList?.find(
           (item) => item.data_collection_id === "callback_timestamp_iso_8601",
@@ -198,6 +201,7 @@ export async function createGatewayRuntimeState(params: {
                 params.log.info(
                   `elevenlabs webhook: scheduled callback for ${candidateName} at ${callbackTimeValue}`,
                 );
+                automatedActions.push(`callback scheduled for ${callbackTimeValue}`);
               }
             }
           } catch (err) {
@@ -254,6 +258,12 @@ export async function createGatewayRuntimeState(params: {
                 params.log.info(
                   `elevenlabs webhook: sent interview invite to ${candidateEmail} for ${calendarInviteTime}`,
                 );
+                if (inviteResult.calendarEventCreated) {
+                  automatedActions.push(`calendar invite sent to ${candidateEmail}`);
+                }
+                if (inviteResult.emailSent) {
+                  automatedActions.push(`confirmation email sent to ${candidateEmail}`);
+                }
               } else {
                 params.log.warn(
                   `elevenlabs webhook: failed to send interview invite: ${inviteResult.error}`,
@@ -286,7 +296,11 @@ export async function createGatewayRuntimeState(params: {
           ? ` Summary: ${String(payload.analysis?.transcript_summary).slice(0, 500)}`
           : "";
 
-        const message = `ElevenLabs call ${statusText}. Conversation ID: ${payload.conversationId}.${dataText}${summaryText}`;
+        // Add automated actions info
+        const actionsText =
+          automatedActions.length > 0 ? ` Automated actions: ${automatedActions.join("; ")}.` : "";
+
+        const message = `ElevenLabs call ${statusText}. Conversation ID: ${payload.conversationId}.${dataText}${summaryText}${actionsText}`;
         enqueueSystemEvent(message, { sessionKey: mainSessionKey });
         requestHeartbeatNow({ reason: `elevenlabs:${payload.conversationId}` });
       },

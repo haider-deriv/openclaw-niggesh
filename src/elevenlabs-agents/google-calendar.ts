@@ -148,15 +148,36 @@ function buildEmailHtml(
 async function runGogCommand(
   args: string[],
   gogAccount: string,
+  log: { info: (msg: string) => void; warn: (msg: string) => void },
 ): Promise<{ ok: boolean; stdout: string; stderr: string; error?: string }> {
+  const cmdStr = `gog ${args.join(" ")}`;
+  log.info(`[gog] Running: ${cmdStr}`);
+  log.info(`[gog] Account: ${gogAccount}`);
+
   try {
     const { stdout, stderr } = await execFileAsync("gog", args, {
       env: { ...process.env, GOG_ACCOUNT: gogAccount },
       timeout: 30000, // 30 second timeout
     });
+    if (stdout) {
+      log.info(`[gog] stdout: ${stdout.trim()}`);
+    }
+    if (stderr) {
+      log.warn(`[gog] stderr: ${stderr.trim()}`);
+    }
     return { ok: true, stdout, stderr };
   } catch (err) {
-    const error = err as Error & { stdout?: string; stderr?: string };
+    const error = err as Error & { stdout?: string; stderr?: string; code?: string };
+    log.warn(`[gog] Command failed: ${error.message}`);
+    if (error.stdout) {
+      log.warn(`[gog] stdout: ${error.stdout.trim()}`);
+    }
+    if (error.stderr) {
+      log.warn(`[gog] stderr: ${error.stderr.trim()}`);
+    }
+    if (error.code) {
+      log.warn(`[gog] Exit code: ${error.code}`);
+    }
     return {
       ok: false,
       stdout: error.stdout ?? "",
@@ -219,7 +240,7 @@ export async function sendInterviewInvite(
   ];
 
   log.info(`Creating calendar event for ${candidateName} at ${interviewTimestamp}`);
-  const calendarResult = await runGogCommand(calendarArgs, gogAccount);
+  const calendarResult = await runGogCommand(calendarArgs, gogAccount, log);
 
   if (calendarResult.ok) {
     calendarEventCreated = true;
@@ -249,7 +270,7 @@ export async function sendInterviewInvite(
   ];
 
   log.info(`Sending confirmation email to ${candidateEmail}`);
-  const emailResult = await runGogCommand(emailArgs, gogAccount);
+  const emailResult = await runGogCommand(emailArgs, gogAccount, log);
 
   if (emailResult.ok) {
     emailSent = true;
