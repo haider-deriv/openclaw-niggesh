@@ -22,6 +22,8 @@ export type ResolvedElevenLabsAgentsConfig = {
   apiKeySource: "config" | "env" | "none";
   webhookSecret?: string;
   webhookPath: string;
+  /** Google Calendar ID for scheduling interviews (default: "primary") */
+  calendarId: string;
 };
 
 /**
@@ -99,6 +101,9 @@ export function resolveElevenLabsAgentsConfig(cfg: OpenClawConfig): ResolvedElev
     webhookPath = `/${webhookPath}`;
   }
 
+  // Resolve calendar ID for interview scheduling
+  const calendarId = config?.calendarId?.trim() || "primary";
+
   return {
     enabled,
     apiKey,
@@ -110,6 +115,7 @@ export function resolveElevenLabsAgentsConfig(cfg: OpenClawConfig): ResolvedElev
     apiKeySource,
     webhookSecret,
     webhookPath,
+    calendarId,
   };
 }
 

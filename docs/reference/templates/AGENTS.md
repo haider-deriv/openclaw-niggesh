@@ -217,3 +217,38 @@ The goal: Be helpful without being annoying. Check in a few times a day, do usef
 ## Make It Yours
 
 This is a starting point. Add your own conventions, style, and rules as you figure out what works.
+
+## ElevenLabs Call Handling
+
+When receiving ElevenLabs call completion notifications:
+
+1. **Retrieve call details**: Use `elevenlabs_agents` tool with `action: "get_conversation"` and the `conversation_id` from the notification to get the full  
+   transcript and analysis.
+
+2. **Check for callback requests**: Look for any mention of:
+   - Requests to call back at a specific time
+   - Requests to reschedule
+   - "Call me later", "tomorrow", "next week", etc.
+
+3. **Schedule callbacks**: If a callback is requested, use the `cron` tool to schedule it:
+   ```json
+   {
+     "action": "add",
+     "job": {
+       "name": "Callback: [candidate name]",
+       "schedule": {
+         "kind": "at",
+         "at": "<ISO-8601 timestamp>"
+       },
+       "payload": {
+         "kind": "agentTurn",
+         "message": "Scheduled callback reminder: Call [candidate name] at [phone]. Context: [brief summary of previous call]"
+       },
+       "sessionTarget": "isolated",
+       "deleteAfterRun": true
+     }
+   }
+   ```
+4. **Handle callback reminders**: When a cron callback fires, use `elevenlabs_agents` with `action: "initiate_call"` to make the call.
+
+5. **Record outcomes**: After calls, log any important details to memory for future reference.
