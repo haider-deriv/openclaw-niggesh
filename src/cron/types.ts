@@ -5,7 +5,7 @@ export type CronSchedule =
   | { kind: "every"; everyMs: number; anchorMs?: number }
   | { kind: "cron"; expr: string; tz?: string };
 
-export type CronSessionTarget = "main" | "isolated";
+export type CronSessionTarget = "main" | "isolated" | "direct";
 export type CronWakeMode = "next-heartbeat" | "now";
 
 export type CronMessageChannel = ChannelId | "last";
@@ -21,6 +21,11 @@ export type CronDelivery = {
 
 export type CronDeliveryPatch = Partial<CronDelivery>;
 
+/** Static enum of allowed direct call function names */
+export enum DirectCallFunctionName {
+  ELEVENLABS_INITIATE_CALL = "elevenlabs.initiateCall",
+}
+
 export type CronPayload =
   | { kind: "systemEvent"; text: string }
   | {
@@ -35,6 +40,13 @@ export type CronPayload =
       channel?: CronMessageChannel;
       to?: string;
       bestEffortDeliver?: boolean;
+    }
+  | {
+      kind: "directCall";
+      /** Function name from the allowed DirectCallFunctionName enum */
+      functionName: DirectCallFunctionName;
+      /** JSON parameters passed to the function */
+      params: Record<string, unknown>;
     };
 
 export type CronPayloadPatch =
@@ -50,6 +62,11 @@ export type CronPayloadPatch =
       channel?: CronMessageChannel;
       to?: string;
       bestEffortDeliver?: boolean;
+    }
+  | {
+      kind: "directCall";
+      functionName?: DirectCallFunctionName;
+      params?: Record<string, unknown>;
     };
 
 export type CronJobState = {

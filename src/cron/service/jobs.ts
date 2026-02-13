@@ -38,11 +38,16 @@ export function assertSupportedJobSpec(job: Pick<CronJob, "sessionTarget" | "pay
   if (job.sessionTarget === "isolated" && job.payload.kind !== "agentTurn") {
     throw new Error('isolated cron jobs require payload.kind="agentTurn"');
   }
+  if (job.sessionTarget === "direct" && job.payload.kind !== "directCall") {
+    throw new Error('direct cron jobs require payload.kind="directCall"');
+  }
 }
 
 function assertDeliverySupport(job: Pick<CronJob, "sessionTarget" | "delivery">) {
-  if (job.delivery && job.sessionTarget !== "isolated") {
-    throw new Error('cron delivery config is only supported for sessionTarget="isolated"');
+  if (job.delivery && job.sessionTarget !== "isolated" && job.sessionTarget !== "direct") {
+    throw new Error(
+      'cron delivery config is only supported for sessionTarget="isolated" or "direct"',
+    );
   }
 }
 
@@ -336,6 +341,18 @@ function mergeCronPayload(existing: CronPayload, patch: CronPayloadPatch): CronP
     return { kind: "systemEvent", text };
   }
 
+  if (patch.kind === "directCall") {
+    if (existing.kind !== "directCall") {
+      return buildPayloadFromPatch(patch);
+    }
+    return {
+      kind: "directCall",
+      functionName: patch.functionName ?? existing.functionName,
+      params: patch.params ?? existing.params,
+    };
+  }
+
+  // patch.kind === "agentTurn"
   if (existing.kind !== "agentTurn") {
     return buildPayloadFromPatch(patch);
   }
@@ -420,6 +437,18 @@ function buildPayloadFromPatch(patch: CronPayloadPatch): CronPayload {
     return { kind: "systemEvent", text: patch.text };
   }
 
+  if (patch.kind === "directCall") {
+    if (!patch.functionName) {
+      throw new Error('cron.update payload.kind="directCall" requires functionName');
+    }
+    return {
+      kind: "directCall",
+      functionName: patch.functionName,
+      params: patch.params ?? {},
+    };
+  }
+
+  // agentTurn
   if (typeof patch.message !== "string" || patch.message.length === 0) {
     throw new Error('cron.update payload.kind="agentTurn" requires message');
   }

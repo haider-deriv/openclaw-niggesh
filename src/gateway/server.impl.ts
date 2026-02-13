@@ -351,6 +351,8 @@ export async function startGatewayServer(
     log,
     logHooks,
     logPlugins,
+    // getCron is called later, after cron is initialized below
+    getCron: () => cron,
   });
   let bonjourStop: (() => Promise<void>) | null = null;
   const nodeRegistry = new NodeRegistry();

@@ -1,8 +1,11 @@
 import type { CliDeps } from "../cli/deps.js";
-import { resolveDefaultAgentId } from "../agents/agent-scope.js";
+import { resolveAgentWorkspaceDir, resolveDefaultAgentId } from "../agents/agent-scope.js";
 import { loadConfig } from "../config/config.js";
 import { resolveAgentMainSessionKey } from "../config/sessions.js";
+// Import to trigger handler registration
+import "../elevenlabs-agents/direct-call.js";
 import { resolveStorePath } from "../config/sessions/paths.js";
+import { getDirectCallHandler } from "../cron/direct-call-registry.js";
 import { runCronIsolatedAgentTurn } from "../cron/isolated-agent.js";
 import { appendCronRunLog, resolveCronRunLogPath } from "../cron/run-log.js";
 import { CronService } from "../cron/service.js";
@@ -87,6 +90,20 @@ export function buildGatewayCronService(params: {
         agentId,
         sessionKey: `cron:${job.id}`,
         lane: "cron",
+      });
+    },
+    runDirectCall: async ({ job, functionName, params: callParams }) => {
+      const handler = getDirectCallHandler(functionName);
+      if (!handler) {
+        return { status: "error", error: `Unknown direct call function: ${functionName}` };
+      }
+      const { agentId, cfg: runtimeConfig } = resolveCronAgent(job.agentId);
+      const workspaceDir = resolveAgentWorkspaceDir(runtimeConfig, agentId);
+      return await handler(callParams, {
+        cfg: runtimeConfig,
+        deps: params.deps,
+        job,
+        workspaceDir,
       });
     },
     log: getChildLogger({ module: "cron", storePath }),

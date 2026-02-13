@@ -471,4 +471,41 @@ export type ToolsConfig = {
     /** Request timeout in milliseconds. Default: 30000. */
     timeoutMs?: number;
   };
+  /** ElevenLabs Agents (Conversational AI) tool configuration. */
+  elevenlabsAgents?: {
+    /** Enable ElevenLabs Agents tool (default: true when credentials are present). */
+    enabled?: boolean;
+    /** ElevenLabs API key. */
+    apiKey?: string;
+    /** ElevenLabs Agent ID for outbound calls. */
+    agentId?: string;
+    /** Twilio phone number ID configured in ElevenLabs. */
+    phoneNumberId?: string;
+    /** Default dynamic variables to pass to the agent. */
+    defaultDynamicVariables?: Record<string, string>;
+    /** Base URL for ElevenLabs API. Default: https://api.elevenlabs.io */
+    baseUrl?: string;
+    /** Request timeout in seconds. Default: 60. */
+    timeoutSeconds?: number;
+  };
+  /** Talently Agent tool configuration (for answering recruitment questions). */
+  talentlyAgent?: {
+    /** Enable Talently Agent tool (default: true when agentUrl is present). */
+    enabled?: boolean;
+    /** URL of the Talently agent API (e.g., "https://talently-agent.example.com"). */
+    agentUrl?: string;
+    /** Request timeout in milliseconds. Default: 60000. */
+    timeoutMs?: number;
+  };
+  /** Talently CV Analysis tool configuration. */
+  talentlyCvAnalysis?: {
+    /** Enable Talently CV Analysis tool (default: true when apiUrl is present). */
+    enabled?: boolean;
+    /** URL of the CV Analysis API (e.g., "https://skillssue.example.com/api"). */
+    apiUrl?: string;
+    /** API key for authentication (from generate_api_key.py script). */
+    apiKey?: string;
+    /** Request timeout in milliseconds. Default: 120000. */
+    timeoutMs?: number;
+  };
 };

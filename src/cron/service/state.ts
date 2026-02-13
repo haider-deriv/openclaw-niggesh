@@ -47,6 +47,17 @@ export type CronServiceDeps = {
     sessionId?: string;
     sessionKey?: string;
   }>;
+  /** Handler for direct call jobs (bypasses agent). */
+  runDirectCall?: (params: {
+    job: CronJob;
+    functionName: string;
+    params: Record<string, unknown>;
+  }) => Promise<{
+    status: "ok" | "error";
+    error?: string;
+    summary?: string;
+    data?: Record<string, unknown>;
+  }>;
   onEvent?: (evt: CronEvent) => void;
 };
 

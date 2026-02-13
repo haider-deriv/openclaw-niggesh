@@ -474,6 +474,43 @@ async function executeJobCore(
     }
   }
 
+  // Handle direct call jobs (no agent involvement)
+  if (job.sessionTarget === "direct") {
+    if (job.payload.kind !== "directCall") {
+      return { status: "error", error: "direct job requires payload.kind=directCall" };
+    }
+    if (!state.deps.runDirectCall) {
+      return { status: "error", error: "runDirectCall not configured" };
+    }
+
+    const directResult = await state.deps.runDirectCall({
+      job,
+      functionName: job.payload.functionName,
+      params: job.payload.params,
+    });
+
+    // Post summary to main session if delivery is requested
+    const summaryText = directResult.summary?.trim();
+    const deliveryPlan = resolveCronDeliveryPlan(job);
+    if (summaryText && deliveryPlan.requested) {
+      const prefix = "Cron (direct)";
+      const label =
+        directResult.status === "error"
+          ? `${prefix} error: ${summaryText}`
+          : `${prefix}: ${summaryText}`;
+      state.deps.enqueueSystemEvent(label, { agentId: job.agentId });
+      if (job.wakeMode === "now") {
+        state.deps.requestHeartbeatNow({ reason: `cron:${job.id}` });
+      }
+    }
+
+    return {
+      status: directResult.status,
+      error: directResult.error,
+      summary: directResult.summary,
+    };
+  }
+
   if (job.payload.kind !== "agentTurn") {
     return { status: "skipped", error: "isolated job requires payload.kind=agentTurn" };
   }

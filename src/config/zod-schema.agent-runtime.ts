@@ -569,6 +569,37 @@ export const ToolsSchema = z
       })
       .strict()
       .optional(),
+    elevenlabsAgents: z
+      .object({
+        enabled: z.boolean().optional(),
+        apiKey: z.string().optional(),
+        agentId: z.string().optional(),
+        phoneNumberId: z.string().optional(),
+        defaultDynamicVariables: z.record(z.string(), z.string()).optional(),
+        baseUrl: z.string().optional(),
+        timeoutSeconds: z.number().int().positive().optional(),
+        webhookSecret: z.string().optional(),
+        webhookPath: z.string().optional(),
+      })
+      .strict()
+      .optional(),
+    talentlyAgent: z
+      .object({
+        enabled: z.boolean().optional(),
+        agentUrl: z.string().optional(),
+        timeoutMs: z.number().int().positive().optional(),
+      })
+      .strict()
+      .optional(),
+    talentlyCvAnalysis: z
+      .object({
+        enabled: z.boolean().optional(),
+        apiUrl: z.string().optional(),
+        apiKey: z.string().optional(),
+        timeoutMs: z.number().int().positive().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .superRefine((value, ctx) => {

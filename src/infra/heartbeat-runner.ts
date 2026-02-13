@@ -157,6 +157,13 @@ export function isCronSystemEvent(evt: string) {
   return !isHeartbeatNoiseEvent(evt) && !isExecCompletionEvent(evt);
 }
 
+// Prompt used when an ElevenLabs call has completed and the webhook notification was received.
+// This instructs the model to retrieve the call details and take any necessary follow-up actions.
+const ELEVENLABS_EVENT_PROMPT =
+  "An ElevenLabs voice call has completed. The notification is shown in the system messages above. " +
+  "Use the elevenlabs_agents tool with action 'get_conversation' to retrieve the full transcript and analysis, " +
+  "then take any appropriate follow-up actions based on the call outcome.";
+
 type HeartbeatAgentState = {
   agentId: string;
   heartbeat?: HeartbeatConfig;
@@ -536,25 +543,36 @@ export async function runHeartbeatOnce(opts: {
     accountId: delivery.accountId,
   }).responsePrefix;
 
-  // Check if this is an exec event or cron event with pending system events.
+  // Check if this is an exec event, cron event, or ElevenLabs event with pending system events.
   // If so, use a specialized prompt that instructs the model to relay the result
   // instead of the standard heartbeat prompt with "reply HEARTBEAT_OK".
   const isExecEvent = opts.reason === "exec-event";
   const isCronEvent = Boolean(opts.reason?.startsWith("cron:"));
-  const pendingEvents = isExecEvent || isCronEvent ? peekSystemEvents(sessionKey) : [];
+  const isElevenLabsEvent = Boolean(opts.reason?.startsWith("elevenlabs:"));
+  const pendingEvents =
+    isExecEvent || isCronEvent || isElevenLabsEvent ? peekSystemEvents(sessionKey) : [];
   const cronEvents = pendingEvents.filter((evt) => isCronSystemEvent(evt));
   const hasExecCompletion = pendingEvents.some(isExecCompletionEvent);
   const hasCronEvents = isCronEvent && cronEvents.length > 0;
+  const hasElevenLabsEvents = isElevenLabsEvent && pendingEvents.length > 0;
   const prompt = hasExecCompletion
     ? EXEC_EVENT_PROMPT
     : hasCronEvents
       ? buildCronEventPrompt(cronEvents)
-      : resolveHeartbeatPrompt(cfg, heartbeat);
+      : hasElevenLabsEvents
+        ? ELEVENLABS_EVENT_PROMPT
+        : resolveHeartbeatPrompt(cfg, heartbeat);
   const ctx = {
     Body: appendCronStyleCurrentTimeLine(prompt, cfg, startedAt),
     From: sender,
     To: sender,
-    Provider: hasExecCompletion ? "exec-event" : hasCronEvents ? "cron-event" : "heartbeat",
+    Provider: hasExecCompletion
+      ? "exec-event"
+      : hasCronEvents
+        ? "cron-event"
+        : hasElevenLabsEvents
+          ? "elevenlabs-event"
+          : "heartbeat",
     SessionKey: sessionKey,
   };
   if (!visibility.showAlerts && !visibility.showOk && !visibility.useIndicator) {
