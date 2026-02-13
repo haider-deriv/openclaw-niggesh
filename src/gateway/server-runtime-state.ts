@@ -15,8 +15,14 @@ import { resolveAgentWorkspaceDir, resolveDefaultAgentId } from "../agents/agent
 import { CANVAS_HOST_PATH } from "../canvas-host/a2ui.js";
 import { type CanvasHostHandler, createCanvasHostHandler } from "../canvas-host/server.js";
 import { resolveMainSessionKeyFromConfig } from "../config/sessions.js";
+import { DirectCallFunctionName } from "../cron/types.js";
 import { resolveElevenLabsAgentsConfig } from "../elevenlabs-agents/config.js";
-import { saveConversationFromWebhook } from "../elevenlabs-agents/store.js";
+import {
+  parseEmailTemplateType,
+  resolveGogAccount,
+  sendInterviewInvite,
+} from "../elevenlabs-agents/google-calendar.js";
+import { getStoredConversation, saveConversationFromWebhook } from "../elevenlabs-agents/store.js";
 import { registerElevenLabsWebhookHandler } from "../elevenlabs-agents/webhook.js";
 import { requestHeartbeatNow } from "../infra/heartbeat-wake.js";
 import { enqueueSystemEvent } from "../infra/system-events.js";
@@ -55,6 +61,8 @@ export async function createGatewayRuntimeState(params: {
   log: { info: (msg: string) => void; warn: (msg: string) => void };
   logHooks: ReturnType<typeof createSubsystemLogger>;
   logPlugins: ReturnType<typeof createSubsystemLogger>;
+  /** Callback to get the cron service (set after this function returns) */
+  getCron?: () => import("../cron/service.js").CronService | null;
 }): Promise<{
   canvasHost: CanvasHostHandler | null;
   httpServer: HttpServer;
@@ -147,14 +155,126 @@ export async function createGatewayRuntimeState(params: {
           );
         }
 
-        // Notify agent with summary and data collection results
-        const mainSessionKey = resolveMainSessionKeyFromConfig();
-        const statusText = payload.status === "done" ? "completed" : payload.status;
-
         // Extract data collection results
         const dataCollectionList = payload.analysis?.data_collection_results_list as
           | Array<{ data_collection_id: string; value: unknown }>
           | undefined;
+
+        // Check for callback_time and schedule automatic callback
+        const callbackTimeItem = dataCollectionList?.find(
+          (item) => item.data_collection_id === "callback_timestamp_iso_8601",
+        );
+        const callbackTimeValue = callbackTimeItem?.value;
+        if (
+          callbackTimeValue &&
+          typeof callbackTimeValue === "string" &&
+          callbackTimeValue.trim()
+        ) {
+          try {
+            const cron = params.getCron?.();
+            if (cron) {
+              // Get stored conversation to retrieve to_number and dynamic_variables
+              const storedConv = await getStoredConversation(workspaceDir, payload.conversationId);
+              if (storedConv && storedConv.to_number) {
+                const candidateName =
+                  storedConv.dynamic_variables?.candidate_name || storedConv.to_number;
+                await cron.add({
+                  name: `Callback: ${candidateName}`,
+                  enabled: true,
+                  schedule: { kind: "at", at: callbackTimeValue },
+                  sessionTarget: "direct",
+                  wakeMode: "now",
+                  payload: {
+                    kind: "directCall",
+                    functionName: DirectCallFunctionName.ELEVENLABS_INITIATE_CALL,
+                    params: {
+                      toNumber: storedConv.to_number,
+                      dynamicVariables: storedConv.dynamic_variables,
+                      originalConversationId: payload.conversationId,
+                    },
+                  },
+                  delivery: { mode: "announce", channel: "last" },
+                });
+                params.log.info(
+                  `elevenlabs webhook: scheduled callback for ${candidateName} at ${callbackTimeValue}`,
+                );
+              }
+            }
+          } catch (err) {
+            params.log.warn(
+              `elevenlabs webhook: failed to schedule callback for ${payload.conversationId}: ${err}`,
+            );
+          }
+        }
+
+        // Check for calendar invite data and send interview invite immediately
+        const candidateEmailItem = dataCollectionList?.find(
+          (item) => item.data_collection_id === "candidate_email",
+        );
+        const calendarInviteTimeItem = dataCollectionList?.find(
+          (item) => item.data_collection_id === "calendar_invite_timestamp_iso_8601",
+        );
+        const emailTemplateTypeItem = dataCollectionList?.find(
+          (item) => item.data_collection_id === "email_type",
+        );
+        const candidateEmail = candidateEmailItem?.value;
+        const calendarInviteTime = calendarInviteTimeItem?.value;
+        const templateType = parseEmailTemplateType(emailTemplateTypeItem?.value);
+
+        if (
+          candidateEmail &&
+          typeof candidateEmail === "string" &&
+          candidateEmail.trim() &&
+          calendarInviteTime &&
+          typeof calendarInviteTime === "string" &&
+          calendarInviteTime.trim()
+        ) {
+          try {
+            const gogAccount = resolveGogAccount(params.cfg);
+            if (gogAccount) {
+              // Get stored conversation to retrieve candidate name
+              const storedConv = await getStoredConversation(workspaceDir, payload.conversationId);
+              const candidateName =
+                storedConv?.dynamic_variables?.candidate_name || candidateEmail.split("@")[0];
+
+              const inviteResult = await sendInterviewInvite(
+                {
+                  candidateName,
+                  candidateEmail: candidateEmail.trim(),
+                  interviewTimestamp: calendarInviteTime.trim(),
+                  calendarId: elevenLabsConfig.calendarId,
+                  conversationId: payload.conversationId,
+                  templateType,
+                },
+                gogAccount,
+                params.log,
+              );
+
+              if (inviteResult.ok) {
+                params.log.info(
+                  `elevenlabs webhook: sent interview invite to ${candidateEmail} for ${calendarInviteTime}`,
+                );
+              } else {
+                params.log.warn(
+                  `elevenlabs webhook: failed to send interview invite: ${inviteResult.error}`,
+                );
+              }
+            } else {
+              params.log.warn(
+                `elevenlabs webhook: calendar invite data present but GOG_ACCOUNT not configured`,
+              );
+            }
+          } catch (err) {
+            params.log.warn(
+              `elevenlabs webhook: failed to send interview invite for ${payload.conversationId}: ${err}`,
+            );
+          }
+        }
+
+        // Notify agent with summary and data collection results
+        const mainSessionKey = resolveMainSessionKeyFromConfig();
+        const statusText = payload.status === "done" ? "completed" : payload.status;
+
         const dataPoints = dataCollectionList
           ?.map((item) => `${item.data_collection_id}: ${JSON.stringify(item.value)}`)
           .join(", ");

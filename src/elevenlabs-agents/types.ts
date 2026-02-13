@@ -20,7 +20,20 @@ export type ElevenLabsAgentsConfig = {
   webhookSecret?: string;
   /** Webhook endpoint path (default: /elevenlabs/webhook) */
   webhookPath?: string;
+  /** Google Calendar ID for scheduling interviews (default: "primary") */
+  calendarId?: string;
 };
+
+// =============================================================================
+// Email Template Types
+// =============================================================================
+
+/** Email template types - must match ElevenLabs data collection enum values */
+export enum EmailTemplateType {
+  INTERVIEW_CONFIRMATION = "interview_confirmation",
+  FOLLOW_UP = "follow_up",
+  RESCHEDULE = "reschedule",
+}
 
 // =============================================================================
 // API Request/Response Types
