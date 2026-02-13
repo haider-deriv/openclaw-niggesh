@@ -263,8 +263,8 @@ export async function deleteConversation(
 }
 
 /**
- * Get the most recent completed conversation summary for a phone number.
- * Returns the transcript_summary from the most recent "done" conversation to this number.
+ * Get previous conversation summaries for a phone number.
+ * Returns a formatted string with the latest 3 summaries (numbered) and a count of additional older conversations.
  */
 export async function getPreviousCallSummary(
   workspaceDir: string,
@@ -272,9 +272,12 @@ export async function getPreviousCallSummary(
 ): Promise<string | undefined> {
   const store = await readStore(workspaceDir);
 
-  // Find all completed conversations to this number
+  // Find all completed conversations to this number with summaries
   const conversations = Object.values(store.conversations)
-    .filter((conv) => conv.to_number === toNumber && conv.status === "done")
+    .filter(
+      (conv) =>
+        conv.to_number === toNumber && conv.status === "done" && conv.analysis?.transcript_summary,
+    )
     .toSorted((a, b) => {
       // Sort by initiated_at descending (most recent first)
       const dateA = new Date(a.initiated_at).getTime();
@@ -282,9 +285,27 @@ export async function getPreviousCallSummary(
       return dateB - dateA;
     });
 
-  // Return the most recent summary if available
-  const mostRecent = conversations[0];
-  return mostRecent?.analysis?.transcript_summary;
+  if (conversations.length === 0) {
+    return undefined;
+  }
+
+  // Get the latest 3 conversations
+  const latest3 = conversations.slice(0, 3);
+  const remainingCount = conversations.length - latest3.length;
+
+  // Build the formatted string
+  const summaryLines = latest3.map((conv, index) => {
+    const summary = conv.analysis?.transcript_summary ?? "";
+    return `${index + 1}. ${summary}`;
+  });
+
+  let result = summaryLines.join("\n\n");
+
+  if (remainingCount > 0) {
+    result += `\n\n(and ${remainingCount} previous conversation${remainingCount > 1 ? "s" : ""})`;
+  }
+
+  return result;
 }
 
 /**
