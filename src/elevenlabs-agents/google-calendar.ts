@@ -143,19 +143,42 @@ function buildEmailHtml(
 }
 
 /**
- * Execute gog CLI command.
+ * Get shell config for running commands (like the agent does).
+ */
+function getShellConfig(): { shell: string; args: string[] } {
+  const envShell = process.env.SHELL?.trim();
+  const shell = envShell && envShell.length > 0 ? envShell : "/bin/sh";
+  return { shell, args: ["-l", "-c"] }; // -l for login shell to get full env
+}
+
+/**
+ * Escape a string for shell usage.
+ */
+function shellEscape(str: string): string {
+  // Use single quotes and escape any single quotes within
+  return `'${str.replace(/'/g, "'\"'\"'")}'`;
+}
+
+/**
+ * Execute gog CLI command through a login shell (like the agent does).
+ * This ensures access to keychain credentials and full PATH.
  */
 async function runGogCommand(
   args: string[],
   gogAccount: string,
   log: { info: (msg: string) => void; warn: (msg: string) => void },
 ): Promise<{ ok: boolean; stdout: string; stderr: string; error?: string }> {
-  const cmdStr = `gog ${args.join(" ")}`;
+  const { shell, args: shellArgs } = getShellConfig();
+
+  // Build the full command string
+  const gogCmd = ["gog", ...args.map(shellEscape)].join(" ");
+  const cmdStr = gogCmd;
   log.info(`[gog] Running: ${cmdStr}`);
   log.info(`[gog] Account: ${gogAccount}`);
+  log.info(`[gog] Shell: ${shell} ${shellArgs.join(" ")}`);
 
   try {
-    const { stdout, stderr } = await execFileAsync("gog", args, {
+    const { stdout, stderr } = await execFileAsync(shell, [...shellArgs, gogCmd], {
       env: { ...process.env, GOG_ACCOUNT: gogAccount },
       timeout: 30000, // 30 second timeout
     });
@@ -238,7 +261,7 @@ export async function sendInterviewInvite(
         endIso,
         "--description",
         eventDescription,
-        "--add-attendee",
+        "--attendees",
         candidateEmail,
         "--no-input",
       ];
