@@ -59,13 +59,28 @@ function isDownloadableAttachment(attachment: LinkedInMessageAttachment): boolea
 }
 
 /**
+ * Sanitize chat ID for use as a directory name.
+ * Removes/replaces characters that are unsafe for filesystem paths.
+ */
+function sanitizeChatId(chatId: string): string {
+  // Replace unsafe characters with underscores, collapse multiple underscores
+  return chatId
+    .replace(/[^a-zA-Z0-9_-]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "")
+    .slice(0, 64); // Limit length for filesystem safety
+}
+
+/**
  * Downloads all media attachments from a LinkedIn message and returns them as an array.
+ * Files are saved to inbound/linkedin/{chatId}/ for organization by conversation.
  * Returns `null` when no attachments could be downloaded.
  */
 export async function resolveLinkedInMedia(params: {
   attachments?: LinkedInMessageAttachment[];
   clientOpts: LinkedInClientOptions;
   messageId: string;
+  chatId: string;
   maxBytes: number;
 }): Promise<LinkedInMediaResult[] | null> {
   const runtime = getLinkedInRuntime();
@@ -83,6 +98,10 @@ export async function resolveLinkedInMedia(params: {
       : downloadable;
 
   const results: LinkedInMediaResult[] = [];
+
+  // Build subdirectory path: inbound/linkedin/{sanitized_chat_id}
+  const sanitizedChatId = sanitizeChatId(params.chatId);
+  const subdir = `inbound/linkedin/${sanitizedChatId}`;
 
   for (const attachment of limitedAttachments) {
     // Skip unavailable attachments
@@ -109,12 +128,12 @@ export async function resolveLinkedInMedia(params: {
         continue;
       }
 
-      // Save to disk
+      // Save to disk in linkedin-specific subdirectory
       const filename = resolveAttachmentFilename(attachment);
       const saved = await saveMediaBuffer(
         Buffer.from(content),
         contentType,
-        "inbound",
+        subdir,
         params.maxBytes,
         filename,
       );

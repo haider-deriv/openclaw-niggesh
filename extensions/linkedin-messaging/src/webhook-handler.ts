@@ -270,10 +270,12 @@ export async function processLinkedInMessage(
   };
 
   // Download media attachments (like Slack does)
+  // Files are saved to inbound/linkedin/{chat_id}/ for organization
   const media = await resolveLinkedInMedia({
     attachments: payload.attachments,
     clientOpts,
     messageId: payload.message_id,
+    chatId: payload.chat_id,
     maxBytes: MEDIA_MAX_BYTES,
   });
 
