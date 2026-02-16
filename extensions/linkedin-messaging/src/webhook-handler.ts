@@ -14,6 +14,8 @@ import {
 import type { LinkedInWebhookPayload } from "../../../src/linkedin/types.js";
 import type { ResolvedLinkedInAccount } from "./channel.js";
 import { sendMessage } from "../../../src/linkedin/client.js";
+import { MEDIA_MAX_BYTES } from "../../../src/media/store.js";
+import { resolveLinkedInMedia } from "./media.js";
 import { getLinkedInRuntime } from "./runtime.js";
 
 export interface LinkedInWebhookHandlerOptions {
@@ -267,9 +269,21 @@ export async function processLinkedInMessage(
     timeoutMs: account.timeoutMs,
   };
 
+  // Download media attachments (like Slack does)
+  const media = await resolveLinkedInMedia({
+    attachments: payload.attachments,
+    clientOpts,
+    messageId: payload.message_id,
+    maxBytes: MEDIA_MAX_BYTES,
+  });
+
+  // Build placeholder text for attachments (as fallback if download fails or for non-downloadable types)
+  const mediaPlaceholder = media ? media.map((m) => m.placeholder).join(" ") : undefined;
+
   // Build message body with attachment info
   let messageBody = payload.message ?? "";
-  if (payload.attachments && payload.attachments.length > 0) {
+  if (!media && payload.attachments && payload.attachments.length > 0) {
+    // Only add text placeholders if we didn't download the media
     const attachmentDescriptions = payload.attachments.map((att) => {
       if (att.type === "img") return `[Image attachment${att.url ? `: ${att.url}` : ""}]`;
       if (att.type === "video") return `[Video attachment${att.url ? `: ${att.url}` : ""}]`;
@@ -284,6 +298,9 @@ export async function processLinkedInMessage(
     } else {
       messageBody = attachmentDescriptions.join("\n");
     }
+  } else if (media && !messageBody) {
+    // If we have downloaded media but no text, use placeholder as body
+    messageBody = mediaPlaceholder ?? "";
   }
 
   // Format message body with sender info (like Slack does)
@@ -336,6 +353,12 @@ export async function processLinkedInMessage(
     : `linkedin:group:${payload.chat_id}`;
   const linkedInTo = `linkedin:${account.unipileAccountId}`;
 
+  // Resolve media fields for context
+  const firstMedia = media?.[0];
+  const firstMediaType = firstMedia
+    ? (firstMedia.contentType ?? "application/octet-stream")
+    : undefined;
+
   const ctxPayload: MsgContext = {
     Body: formattedBody,
     RawBody: messageBody,
@@ -355,6 +378,16 @@ export async function processLinkedInMessage(
     Timestamp: messageTimestamp,
     OriginatingChannel: "linkedin" as const,
     OriginatingTo: linkedInTo,
+    // Media fields (like Slack)
+    MediaPath: firstMedia?.path,
+    MediaType: firstMediaType,
+    MediaUrl: firstMedia?.path,
+    MediaPaths: media && media.length > 0 ? media.map((m) => m.path) : undefined,
+    MediaUrls: media && media.length > 0 ? media.map((m) => m.path) : undefined,
+    MediaTypes:
+      media && media.length > 0
+        ? media.map((m) => m.contentType ?? "application/octet-stream")
+        : undefined,
   };
 
   console.log("[LINKEDIN] Built MsgContext:", JSON.stringify(ctxPayload, null, 2));
