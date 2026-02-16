@@ -5,6 +5,7 @@ import type { AnyAgentTool } from "./tools/common.js";
 import { createElevenLabsAgentsTool } from "../elevenlabs-agents/tool.js";
 import {
   createLinkedInTalentSearchTool,
+  createLinkedInCandidateEnrichTool,
   createLinkedInMessageConnectionTool,
 } from "../linkedin/tool.js";
 import { resolvePluginTools } from "../plugins/tools.js";
@@ -166,6 +167,13 @@ export function createOpenClawTools(options?: {
   });
   if (linkedInTalentTool) {
     tools.push(linkedInTalentTool);
+  }
+
+  const linkedInCandidateEnrichTool = createLinkedInCandidateEnrichTool({
+    config: options?.config,
+  });
+  if (linkedInCandidateEnrichTool) {
+    tools.push(linkedInCandidateEnrichTool);
   }
 
   const linkedInMessageTool = createLinkedInMessageConnectionTool({
