@@ -1,7 +1,4 @@
 import type { OpenClawConfig } from "../config/config.js";
-import type { GatewayMessageChannel } from "../utils/message-channel.js";
-import type { SandboxFsBridge } from "./sandbox/fs-bridge.js";
-import type { AnyAgentTool } from "./tools/common.js";
 import { createElevenLabsAgentsTool } from "../elevenlabs-agents/tool.js";
 import {
   createLinkedInTalentSearchTool,
@@ -11,7 +8,6 @@ import {
 import { resolvePluginTools } from "../plugins/tools.js";
 import { createTalentlyCVAnalysisTool } from "../talently-cv-analysis/tool.js";
 import { createTalentlyTool } from "../talently/tool.js";
-import { resolvePluginTools } from "../plugins/tools.js";
 import type { GatewayMessageChannel } from "../utils/message-channel.js";
 import { resolveSessionAgentId } from "./agent-scope.js";
 import type { SandboxFsBridge } from "./sandbox/fs-bridge.js";

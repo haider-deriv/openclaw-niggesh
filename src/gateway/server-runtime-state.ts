@@ -1,22 +1,9 @@
 import type { Server as HttpServer } from "node:http";
 import { WebSocketServer } from "ws";
-import { CANVAS_HOST_PATH } from "../canvas-host/a2ui.js";
-import { type CanvasHostHandler, createCanvasHostHandler } from "../canvas-host/server.js";
-import type { CliDeps } from "../cli/deps.js";
-import type { createSubsystemLogger } from "../logging/subsystem.js";
-import type { PluginRegistry } from "../plugins/registry.js";
-import type { RuntimeEnv } from "../runtime.js";
-import type { AuthRateLimiter } from "./auth-rate-limit.js";
-import type { ResolvedGatewayAuth } from "./auth.js";
-import type { ChatAbortControllerEntry } from "./chat-abort.js";
-import type { ControlUiRootState } from "./control-ui.js";
-import type { HooksConfigResolved } from "./hooks.js";
-import type { DedupeEntry } from "./server-shared.js";
-import type { GatewayTlsRuntime } from "./server/tls.js";
-import type { GatewayWsClient } from "./server/ws-types.js";
 import { resolveAgentWorkspaceDir, resolveDefaultAgentId } from "../agents/agent-scope.js";
 import { CANVAS_HOST_PATH } from "../canvas-host/a2ui.js";
 import { type CanvasHostHandler, createCanvasHostHandler } from "../canvas-host/server.js";
+import type { CliDeps } from "../cli/deps.js";
 import { resolveMainSessionKeyFromConfig } from "../config/sessions.js";
 import { DirectCallFunctionName } from "../cron/types.js";
 import { resolveElevenLabsAgentsConfig } from "../elevenlabs-agents/config.js";
@@ -29,6 +16,14 @@ import { getStoredConversation, saveConversationFromWebhook } from "../elevenlab
 import { registerElevenLabsWebhookHandler } from "../elevenlabs-agents/webhook.js";
 import { requestHeartbeatNow } from "../infra/heartbeat-wake.js";
 import { enqueueSystemEvent } from "../infra/system-events.js";
+import type { createSubsystemLogger } from "../logging/subsystem.js";
+import type { PluginRegistry } from "../plugins/registry.js";
+import type { RuntimeEnv } from "../runtime.js";
+import type { AuthRateLimiter } from "./auth-rate-limit.js";
+import type { ResolvedGatewayAuth } from "./auth.js";
+import type { ChatAbortControllerEntry } from "./chat-abort.js";
+import type { ControlUiRootState } from "./control-ui.js";
+import type { HooksConfigResolved } from "./hooks.js";
 import { resolveGatewayListenHosts } from "./net.js";
 import {
   createGatewayBroadcaster,
@@ -148,7 +143,7 @@ export async function createGatewayRuntimeState(params: {
           );
         } catch (err) {
           params.log.warn(
-            `elevenlabs webhook: failed to save conversation ${payload.conversationId}: ${err}`,
+            `elevenlabs webhook: failed to save conversation ${payload.conversationId}: ${String(err)}`,
           );
         }
 
@@ -203,7 +198,7 @@ export async function createGatewayRuntimeState(params: {
             }
           } catch (err) {
             params.log.warn(
-              `elevenlabs webhook: failed to schedule callback for ${payload.conversationId}: ${err}`,
+              `elevenlabs webhook: failed to schedule callback for ${payload.conversationId}: ${String(err)}`,
             );
           }
         }
@@ -275,7 +270,7 @@ export async function createGatewayRuntimeState(params: {
             }
           } catch (err) {
             params.log.warn(
-              `elevenlabs webhook: failed to send interview invite for ${payload.conversationId}: ${err}`,
+              `elevenlabs webhook: failed to send interview invite for ${payload.conversationId}: ${String(err)}`,
             );
           }
         }
