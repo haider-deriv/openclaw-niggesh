@@ -1362,7 +1362,7 @@ export function createLinkedInListConversationsTool(options?: {
               const attendeesResponse = await getChatAttendees(opts, chat.id, { limit: 5 });
               const otherAttendee = attendeesResponse.items.find((a) => a.is_self !== 1);
               if (otherAttendee) {
-                attendeeName = otherAttendee.display_name || null;
+                attendeeName = otherAttendee.name || null;
                 attendeeId = attendeeId || otherAttendee.provider_id;
               }
             } catch {
@@ -1387,7 +1387,7 @@ export function createLinkedInListConversationsTool(options?: {
                 if (a.is_self !== 1) {
                   attendees.push({
                     id: a.provider_id,
-                    name: a.display_name || "Unknown",
+                    name: a.name || "Unknown",
                     profile_url: a.profile_url,
                   });
                 }
@@ -1554,13 +1554,13 @@ export function createLinkedInGetConversationMessagesTool(options?: {
         const attendeeMap = new Map<string, { name: string; profile_url?: string }>();
         for (const attendee of attendeesResponse.items) {
           attendeeMap.set(attendee.provider_id, {
-            name: attendee.display_name || "Unknown",
+            name: attendee.name || "Unknown",
             profile_url: attendee.profile_url,
           });
         }
 
         // Use chat.name as fallback for the other attendee's name (for DMs)
-        // This is more reliable than getChatAttendees which may return null display_name
+        // This supplements getChatAttendees for cases where name resolution fails
         const chatName = chatInfo?.name || null;
         const chatAttendeeProviderId = chatInfo?.attendee_provider_id || null;
         if (chatName && chatAttendeeProviderId) {
