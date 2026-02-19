@@ -14,6 +14,7 @@ export type ResolvedTalentlyInterviewConfig = {
   apiUrl?: string;
   apiKey?: string;
   timeoutMs: number;
+  interviewerEmails: string[];
 };
 
 /**
@@ -52,12 +53,14 @@ export function resolveTalentlyInterviewConfig(
   }
 
   const timeoutMs = config?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const interviewerEmails = config?.interviewerEmails ?? [];
 
   return {
     enabled,
     apiUrl,
     apiKey,
     timeoutMs,
+    interviewerEmails,
   };
 }
 

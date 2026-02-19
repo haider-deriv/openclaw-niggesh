@@ -604,5 +604,7 @@ export type ToolsConfig = {
     apiKey?: string;
     /** Request timeout in milliseconds. Default: 60000. */
     timeoutMs?: number;
+    /** List of interviewer emails that can be used for scheduling interviews. */
+    interviewerEmails?: string[];
   };
 };

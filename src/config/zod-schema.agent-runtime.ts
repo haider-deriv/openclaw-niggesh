@@ -756,6 +756,7 @@ export const ToolsSchema = z
         apiUrl: z.string().optional(),
         apiKey: z.string().optional(),
         timeoutMs: z.number().int().positive().optional(),
+        interviewerEmails: z.array(z.string().email()).optional(),
       })
       .strict()
       .optional(),

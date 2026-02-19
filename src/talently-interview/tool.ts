@@ -62,13 +62,20 @@ export function createTalentlyInterviewTool(options?: {
 
   const clientOpts = buildClientOptions(resolvedConfig);
 
+  // Build description with configured interviewers
+  let description =
+    "Create a quick interview with automatic Zoom meeting and Google Calendar event. " +
+    "Requires interviewer email, candidate email, and scheduled time. " +
+    "Returns the Zoom meeting link and calendar event link.";
+
+  if (resolvedConfig.interviewerEmails.length > 0) {
+    description += ` Available interviewers: ${resolvedConfig.interviewerEmails.join(", ")}.`;
+  }
+
   return {
     label: "Talently Interview",
     name: "talently_interview",
-    description:
-      "Create a quick interview with automatic Zoom meeting and Google Calendar event. " +
-      "Requires interviewer email, candidate email, and scheduled time. " +
-      "Returns the Zoom meeting link and calendar event link.",
+    description,
     parameters: TalentlyInterviewSchema,
     execute: async (_toolCallId, args) => {
       const params = args as Record<string, unknown>;

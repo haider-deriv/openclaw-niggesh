@@ -13,6 +13,7 @@ export type TalentlyInterviewConfig = {
   apiUrl?: string;
   apiKey?: string;
   timeoutMs?: number;
+  interviewerEmails?: string[];
 };
 
 // =============================================================================
